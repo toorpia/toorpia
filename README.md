@@ -1,4 +1,4 @@
-# api
+# toorpia api client
 
 ## toorPIA API利用イメージ
 
