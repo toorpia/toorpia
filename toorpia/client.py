@@ -2,6 +2,7 @@ import requests
 import json
 from .config import API_URL
 from .utils.authentication import get_api_key
+import numpy as np
 
 # デコレータを定義
 def pre_authentication(method):
@@ -45,7 +46,9 @@ class toorPIA:
         if response.status_code == 200:
             baseXyData = response.json()['resdata']['baseXyData']
             self.mapNo = response.json()['resdata']['mapNo']
-            return baseXyData
+
+            np_array = np.array(baseXyData)  # baseXyDataをNumPy配列に変換
+            return np_array  # 変換したNumPy配列を返す
         else:
             print("Data transformation failed.")
             return None
@@ -67,7 +70,9 @@ class toorPIA:
         response = requests.post(f"{API_URL}/data/addplot", json=data_dict, headers=headers)
         if response.status_code == 200:
             addXyData = response.json()['resdata']
-            return addXyData
+
+            np_array = np.array(addXyData) 
+            return np_array 
         else:
             print("Data transformation failed.")
             return None
