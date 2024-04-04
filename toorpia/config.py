@@ -1,2 +1,2 @@
-#API_URL = "https://api.toorpia.com/"
-API_URL = "http://localhost:3000"
+API_URL = "https://dev.toorpia.com/api"
+#API_URL = "http://localhost:3000"
