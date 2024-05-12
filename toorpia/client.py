@@ -27,9 +27,7 @@ class toorPIA:
         """バックエンドにAPIキーを送信して検証させ、セッションキーを取得する"""
         response = requests.post(f"{API_URL}/auth/login", json={"apiKey": self.api_key})
         if response.status_code == 200:
-            session_key = response.json().get('sessionKey')
-            #print(f"Authentication successful. Session key: {session_key}")
-            return session_key
+            return response.json().get('sessionKey')
         else:
             print("Authentication failed.")
             return None
@@ -75,4 +73,15 @@ class toorPIA:
             return np_array 
         else:
             print("Data transformation failed.")
+            return None
+
+    @pre_authentication
+    def list_map(self):
+        """APIキーに関連付けられたマップの一覧を取得する"""
+        headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+        response = requests.get(f"{API_URL}/maps", headers=headers)
+        if response.status_code == 200:
+            return response.json()  # マップの一覧を返す
+        else:
+            print("Failed to retrieve maps.")
             return None

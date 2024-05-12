@@ -37,3 +37,10 @@ def test_addplot():
     # 期待される結果に対して実際の結果をテストする
     # この部分は、fit_transformメソッドの実装に応じて適切に書き換えてください
     assert add_result is not None
+
+def list_map():
+    toorpia_client = toorPIA()
+    maps = toorpia_client.list_map()
+    print(maps)
+
+    assert maps is not None

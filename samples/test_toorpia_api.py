@@ -17,3 +17,6 @@ df_add = df_add.drop(columns=["No", "ID", "Diagnosis"])  # drop the columns that
 
 res_add = toorpia_client.addplot(df_add)  # add the new data to the basemap and return the results
 print(res_add)
+
+maps = toorpia_client.list_map()
+print(maps)
