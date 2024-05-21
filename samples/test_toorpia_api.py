@@ -11,12 +11,16 @@ df =  pd.read_csv("biopsy.csv") # read the data and store it in a pandas datafra
 df = df.drop(columns=["No", "ID", "Diagnosis"])  # drop the columns that are not needed
 
 res = toorpia_client.fit_transform(df)  # make basemap and return the results
+print(res)
+print(len(res))
+
+maps = toorpia_client.list_map()
+print(maps)
 
 df_add =  pd.read_csv("biopsy-add.csv") # read the data and store it in a pandas dataframe
 df_add = df_add.drop(columns=["No", "ID", "Diagnosis"])  # drop the columns that are not needed
 
 res_add = toorpia_client.addplot(df_add)  # add the new data to the basemap and return the results
 print(res_add)
+print(len(res_add))
 
-maps = toorpia_client.list_map()
-print(maps)

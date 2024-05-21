@@ -48,7 +48,8 @@ class toorPIA:
             np_array = np.array(baseXyData)  # baseXyDataをNumPy配列に変換
             return np_array  # 変換したNumPy配列を返す
         else:
-            print("Data transformation failed.")
+            error_message = response.json().get('message', 'Unknown error')  # エラーメッセージの取得
+            print(f"Data transformation failed. Server responded with error: {error_message}")
             return None
 
     @pre_authentication
@@ -72,7 +73,8 @@ class toorPIA:
             np_array = np.array(addXyData) 
             return np_array 
         else:
-            print("Data transformation failed.")
+            error_message = response.json().get('message', 'Unknown error')  # エラーメッセージの取得
+            print(f"Data transformation failed. Server responded with error: {error_message}")
             return None
 
     @pre_authentication
@@ -83,5 +85,6 @@ class toorPIA:
         if response.status_code == 200:
             return response.json()  # マップの一覧を返す
         else:
-            print("Failed to retrieve maps.")
+            error_message = response.json().get('message', 'Unknown error')  # エラーメッセージの取得
+            print(f"Data transformation failed. Server responded with error: {error_message}")
             return None
