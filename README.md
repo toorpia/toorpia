@@ -13,26 +13,28 @@ pip install git+https://github.com/toorpia/toorpia.git
 ```python
 #!/usr/bin/env python
 import pandas as pd
- 
+import os
+
 # create toorpia client
 from toorpia import toorPIA
 toorpia_client = toorPIA()  # defaults to getting the key using os.environ.get("TOORPIA_API_KEY")
 # if you saved the key under a different environment variable name, you can also use the following way: 
 # toorpia_client = toorPIA(api_key=os.environ.get("YOUR_VALID_KEY"))
- 
+
 # do the analysis
-df =  pd.read_csv("input.csv") # read csv file and store it in a pandas dataframe or a numpy array
+df = pd.read_csv("input.csv") # read csv file and store it in a pandas dataframe or a numpy array
 results = toorpia_client.fit_transform(df)  # make basemap
 
-df_add =  pd.read_csv("add.csv") 
-results_add = toorpia_client.addplot(df_add)  # do addplot on the basemap
+# Add plot using a directory containing map data
+df_add = pd.read_csv("add.csv")
+results_add = toorpia_client.addplot(df_add, mapDataDir="/path/to/map/data/directory")
 
 # Export the map
 map_no = toorpia_client.mapNo
-exported_map = toorpia_client.export_map(map_no, compress=True)
+toorpia_client.export_map(map_no, "/path/to/export/directory")
 
 # Import the map
-new_map_no = toorpia_client.import_map(exported_map, compress=True)
+new_map_no = toorpia_client.import_map("/path/to/import/directory")
 ```
 
 ### Environment Variable Configuration
@@ -66,25 +68,37 @@ The toorPIA client now supports exporting and importing maps. These features all
 To export a map, use the `export_map` method:
 
 ```python
-exported_map = toorpia_client.export_map(map_no, compress=True)
+toorpia_client.export_map(map_no, "/path/to/export/directory")
 ```
 
 - `map_no`: The number of the map you want to export.
-- `compress`: Optional boolean parameter. If set to `True`, the map data will be compressed before export.
+- `/path/to/export/directory`: The directory where the map files will be saved.
 
-The method returns the exported map data, which can be saved or used for import.
+The method exports the map data as multiple files in the specified directory, preserving the original file names and formats.
 
 #### Importing a Map
 
 To import a previously exported map, use the `import_map` method:
 
 ```python
-new_map_no = toorpia_client.import_map(exported_map, compress=True)
+new_map_no = toorpia_client.import_map("/path/to/import/directory")
 ```
 
-- `exported_map`: The map data that was previously exported.
-- `compress`: Optional boolean parameter. Should match the setting used during export.
+- `/path/to/import/directory`: The directory containing the map files to be imported.
 
-The method returns the new map number assigned to the imported map.
+The method reads all files from the specified directory and imports them as a new map. It returns the new map number assigned to the imported map.
 
-These new features allow for easier backup, sharing, and transfer of map data between different toorPIA instances or sessions.
+#### Adding Plot with Map Data
+
+The `addplot` method now supports using map data from a directory:
+
+```python
+results_add = toorpia_client.addplot(data, mapDataDir="/path/to/map/data/directory")
+```
+
+- `data`: The data to be added to the plot.
+- `mapDataDir`: The directory containing the map data files.
+
+This method reads all files from the specified directory and uses them as map data for the addplot operation.
+
+These new features allow for easier backup, sharing, and transfer of map data between different toorPIA instances or sessions. They also provide more flexibility in handling map data composed of multiple files in various formats.
