@@ -1,5 +1,7 @@
 import requests
 import json
+import gzip
+import io
 from .config import API_URL
 from .utils.authentication import get_api_key
 import numpy as np
@@ -86,5 +88,49 @@ class toorPIA:
             return response.json()  # マップの一覧を返す
         else:
             error_message = response.json().get('message', 'Unknown error')  # エラーメッセージの取得
-            print(f"Data transformation failed. Server responded with error: {error_message}")
+            print(f"Failed to list maps. Server responded with error: {error_message}")
+            return None
+
+    @pre_authentication
+    def export_map(self, map_no, compress=False, chunk_size=8192):
+        """指定されたマップをエクスポート（ダウンロード）する"""
+        headers = {'session-key': self.session_key}
+        params = {'compress': 'true' if compress else 'false'}
+        
+        with requests.get(f"{API_URL}/maps/export/{map_no}", headers=headers, params=params, stream=True) as response:
+            if response.status_code == 200:
+                content = b''
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        content += chunk
+                
+                if compress:
+                    content = gzip.decompress(content)
+                
+                return json.loads(content.decode('utf-8'))
+            else:
+                error_message = response.json().get('message', 'Unknown error')
+                print(f"Failed to export map. Server responded with error: {error_message}")
+                return None
+
+    @pre_authentication
+    def import_map(self, map_data, compress=False):
+        """マップをインポート（アップロード）する"""
+        headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+        params = {'compress': 'true' if compress else 'false'}
+        
+        if compress:
+            map_data = gzip.compress(json.dumps(map_data).encode('utf-8'))
+        else:
+            map_data = json.dumps(map_data).encode('utf-8')
+        
+        response = requests.post(f"{API_URL}/maps/import", headers=headers, params=params, data=map_data)
+        
+        if response.status_code == 201:
+            result = response.json()
+            print(f"Map imported successfully. New map number: {result['mapNo']}")
+            return result['mapNo']
+        else:
+            error_message = response.json().get('message', 'Unknown error')
+            print(f"Failed to import map. Server responded with error: {error_message}")
             return None
