@@ -119,18 +119,16 @@ class toorPIA:
             # 出力ディレクトリが存在しない場合は作成
             os.makedirs(export_dir, exist_ok=True)
             
-            # 特定のファイルを展開して保存
-            files_to_extract = ['rawdata.csv', 'segments.csv', 'segments.csv.log', 'xy.dat', 'xy.dat.log']
-            
-            for filename in files_to_extract:
-                if filename in map_data:
-                    file_content = base64.b64decode(map_data[filename]).decode('utf-8')
+            # map_dataに含まれる全てのファイルを展開して保存
+            for filename, file_content_b64 in map_data.items():
+                try:
+                    file_content = base64.b64decode(file_content_b64).decode('utf-8')
                     file_path = os.path.join(export_dir, filename)
                     with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(file_content)
                     print(f"Saved file: {file_path}")
-                else:
-                    print(f"Warning: {filename} not found in map data")
+                except Exception as e:
+                    print(f"Error saving file {filename}: {str(e)}")
             
             print(f"Map exported and saved to {export_dir}")
             return map_data
