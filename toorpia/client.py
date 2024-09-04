@@ -3,7 +3,7 @@ import json
 import os
 import base64
 from .config import API_URL
-from .toorpia_utils.authentication import get_api_key
+from .utils.authentication import get_api_key
 import numpy as np
 import hashlib
 import glob
