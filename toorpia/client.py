@@ -126,6 +126,8 @@ class toorPIA:
                     file_path = os.path.join(export_dir, filename)
                     with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(file_content)
+                        f.flush()  # バッファをフラッシュ
+                        os.fsync(f.fileno())  # ファイルシステムに確実に書き込む
                     print(f"Saved file: {file_path}")
                 except Exception as e:
                     print(f"Error saving file {filename}: {str(e)}")
