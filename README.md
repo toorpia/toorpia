@@ -1,104 +1,130 @@
-# toorpia api client
+# toorpia API Client
 
-## How to install
+## Installation
+
+To install the toorpia API client, use the following command:
 
 ```bash
 pip install git+https://github.com/toorpia/toorpia.git
 ```
 
-## How to Use
+## Usage
 
-### Example: Client program
+### Creating a Client
 
 ```python
-#!/usr/bin/env python
-import pandas as pd
-import os
-
-# create toorpia client
 from toorpia import toorPIA
-toorpia_client = toorPIA()  # defaults to getting the key using os.environ.get("TOORPIA_API_KEY")
-# if you saved the key under a different environment variable name, you can also use the following way: 
-# toorpia_client = toorPIA(api_key=os.environ.get("YOUR_VALID_KEY"))
 
-# do the analysis
-df = pd.read_csv("input.csv") # read csv file and store it in a pandas dataframe or a numpy array
-results = toorpia_client.fit_transform(df)  # make basemap
+# Create a client using the default API key from environment variable
+toorpia_client = toorPIA()
 
-# Add plot using a directory containing map data
+# Or, specify a custom API key
+# toorpia_client = toorPIA(api_key=your_api_key)
+```
+
+### Basic Operations
+
+#### 1. Creating a Base Map
+
+```python
+import pandas as pd
+
+df = pd.read_csv("input.csv")
+results = toorpia_client.fit_transform(df)
+```
+
+#### 2. Adding Data to an Existing Map
+
+```python
 df_add = pd.read_csv("add.csv")
-results_add = toorpia_client.addplot(df_add, mapDataDir="/path/to/map/data/directory")
 
-# Export the map
-map_no = toorpia_client.mapNo
+# Using the most recent map
+results_add = toorpia_client.addplot(df_add)
+
+# Using a specific map number
+results_add = toorpia_client.addplot(df_add, 123)
+
+# Using a map from a directory
+results_add = toorpia_client.addplot(df_add, "/path/to/basemap/data/directory")
+```
+
+#### 3. Listing Available Maps
+
+```python
+map_list = toorpia_client.list_map()
+```
+
+#### 4. Exporting a Map
+
+```python
+map_no = toorpia_client.mapNo  # Or any valid map number
 toorpia_client.export_map(map_no, "/path/to/export/directory")
+```
 
-# Import the map
+#### 5. Importing a Map
+
+```python
 new_map_no = toorpia_client.import_map("/path/to/import/directory")
 ```
 
-### Environment Variable Configuration
+## Environment Configuration
 
-#### API Key Configuration
-To use the toorPIA API client, a valid API key is required. This key can be set via the environment variable TOORPIA_API_KEY. By setting the API key, you are authenticated to access the API as a registered user.
+### API Key
 
-- For Unix/Linux/macOS:
+Set your API key using the `TOORPIA_API_KEY` environment variable:
+
+- Unix/Linux/macOS:
+  ```
   export TOORPIA_API_KEY='your-valid-api-key'
+  ```
 
-- For Windows:
+- Windows:
+  ```
   set TOORPIA_API_KEY=your-valid-api-key
+  ```
 
-#### API Server URL Configuration
-For on-premise users, the toorPIA API client can be customized to connect to an internal server typically via HTTP, using an IP address, and served on port 3000. Ensure the URL does not include the path "api" as the backend does not use this in its routing.
+### API Server URL (for on-premise users)
 
-- For Unix/Linux/macOS:
+Set the API server URL using the `TOORPIA_API_URL` environment variable:
+
+- Unix/Linux/macOS:
+  ```
   export TOORPIA_API_URL='http://your-ip-address:3000'
+  ```
 
-- For Windows:
+- Windows:
+  ```
   set TOORPIA_API_URL=http://your-ip-address:3000
+  ```
 
-Once the API key and API server URL are properly set, these configurations will be utilized when accessing the API through the toorPIA client library.
+## Advanced Features
 
-### New Features: Map Export and Import
+### Checksum Calculation and Comparison
 
-The toorPIA client now supports exporting and importing maps. These features allow you to save your maps for later use or transfer them between different instances of toorPIA.
+The client automatically calculates checksums for map data during import and export operations. This ensures data integrity and prevents unnecessary uploads of duplicate data.
 
-#### Exporting a Map
+### Flexible Map Selection in addplot
 
-To export a map, use the `export_map` method:
+The `addplot` method now supports flexible arguments:
 
+- No additional argument: Uses the most recent map
+- Integer argument: Uses the specified map number
+- String argument: Uses the map data from the specified directory
+
+Example:
 ```python
-toorpia_client.export_map(map_no, "/path/to/export/directory")
+toorpia_client.addplot(data)  # Uses most recent map
+toorpia_client.addplot(data, 123)  # Uses map number 123
+toorpia_client.addplot(data, "/path/to/map")  # Uses map data from the specified directory
 ```
 
-- `map_no`: The number of the map you want to export.
-- `/path/to/export/directory`: The directory where the map files will be saved.
+## Error Handling
 
-The method exports the map data as multiple files in the specified directory, preserving the original file names and formats.
+The client provides informative error messages for various scenarios, including authentication failures, invalid requests, and server errors. Always check the return values and handle potential errors in your code.
 
-#### Importing a Map
+## Performance Considerations
 
-To import a previously exported map, use the `import_map` method:
+- Map exports may take some time, especially for large datasets.
+- For `addplot` operations, consider performance implications when working with large map data directories.
 
-```python
-new_map_no = toorpia_client.import_map("/path/to/import/directory")
-```
-
-- `/path/to/import/directory`: The directory containing the map files to be imported.
-
-The method reads all files from the specified directory and imports them as a new map. It returns the new map number assigned to the imported map.
-
-#### Adding Plot with Map Data
-
-The `addplot` method now supports using map data from a directory:
-
-```python
-results_add = toorpia_client.addplot(data, mapDataDir="/path/to/map/data/directory")
-```
-
-- `data`: The data to be added to the plot.
-- `mapDataDir`: The directory containing the map data files.
-
-This method reads all files from the specified directory and uses them as map data for the addplot operation.
-
-These new features allow for easier backup, sharing, and transfer of map data between different toorPIA instances or sessions. They also provide more flexibility in handling map data composed of multiple files in various formats.
+For more detailed information about specific methods and their parameters, refer to the inline documentation in the source code.
