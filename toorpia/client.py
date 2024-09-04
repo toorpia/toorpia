@@ -5,6 +5,8 @@ import base64
 from .config import API_URL
 from .utils.authentication import get_api_key
 import numpy as np
+import hashlib
+import glob
 
 # デコレータを定義
 def pre_authentication(method):
@@ -31,7 +33,8 @@ class toorPIA:
         if response.status_code == 200:
             return response.json().get('sessionKey')
         else:
-            print("Authentication failed.")
+            print(f"Authentication failed. Status code: {response.status_code}")
+            print(f"Response content: {response.text}")
             return None
 
     @pre_authentication
@@ -61,10 +64,13 @@ class toorPIA:
         data_json = data.to_json(orient='split')
         data_dict = json.loads(data_json)
         
-        # mapDataDirが指定されている場合、ディレクトリからマップデータを読み込む
         if mapDataDir is not None:
-            map_data = self._read_map_data_from_directory(mapDataDir)
-            data_dict['mapData'] = map_data
+            map_no = self.import_map(mapDataDir)
+            if map_no is not None:
+                data_dict['mapNo'] = map_no
+            else:
+                print("Error: Failed to import map from directory.")
+                return None
         elif mapNo is not None:
             data_dict['mapNo'] = mapNo
         elif self.mapNo is not None:
@@ -102,41 +108,60 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def export_map(self, map_no, output_dir):
+    def export_map(self, map_no, export_dir):
         """指定されたマップをエクスポート（ダウンロード）し、指定されたディレクトリに保存する"""
         headers = {'session-key': self.session_key}
         
         response = requests.get(f"{API_URL}/maps/export/{map_no}", headers=headers)
         if response.status_code == 200:
-            map_data = response.json()
+            map_data = response.json().get('mapData', {})
             
             # 出力ディレクトリが存在しない場合は作成
-            os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(export_dir, exist_ok=True)
             
-            # マップデータを複数のファイルとして保存
-            for filename, file_content in map_data.items():
-                file_path = os.path.join(output_dir, filename)
-                with open(file_path, 'w') as f:
-                    if isinstance(file_content, str):
+            # 特定のファイルを展開して保存
+            files_to_extract = ['rawdata.csv', 'segments.csv', 'segments.csv.log', 'xy.dat', 'xy.dat.log']
+            
+            for filename in files_to_extract:
+                if filename in map_data:
+                    file_content = base64.b64decode(map_data[filename]).decode('utf-8')
+                    file_path = os.path.join(export_dir, filename)
+                    with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(file_content)
-                    else:
-                        json.dump(file_content, f, indent=2)
+                    print(f"Saved file: {file_path}")
+                else:
+                    print(f"Warning: {filename} not found in map data")
             
-            print(f"Map exported and saved to {output_dir}")
+            print(f"Map exported and saved to {export_dir}")
             return map_data
         else:
             error_message = response.json().get('message', 'Unknown error')
             print(f"Failed to export map. Server responded with error: {error_message}")
+            print(f"Response status code: {response.status_code}")
+            print(f"Response content: {response.text}")
             return None
 
     @pre_authentication
     def import_map(self, input_dir):
         """指定されたディレクトリからマップデータを読み込み、インポート（アップロード）する"""
+        # チェックサムの計算
+        checksum = self.calculate_checksum(input_dir)
+        
+        # サーバーとチェックサムを比較
+        existing_map_no = self.compare_checksum(checksum)
+        if existing_map_no is not None:
+            print(f"A matching map was found. No new upload is necessary. Map No: {existing_map_no}")
+            return existing_map_no
+
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
         
         map_data = self._read_map_data_from_directory(input_dir)
         
-        response = requests.post(f"{API_URL}/maps/import", headers=headers, json=map_data)
+        data_to_send = {
+            'mapData': map_data
+        }
+        
+        response = requests.post(f"{API_URL}/maps/import", headers=headers, json=data_to_send)
         
         if response.status_code == 201:
             result = response.json()
@@ -145,6 +170,8 @@ class toorPIA:
         else:
             error_message = response.json().get('message', 'Unknown error')
             print(f"Failed to import map. Server responded with error: {error_message}")
+            print(f"Response status code: {response.status_code}")
+            print(f"Response content: {response.text}")
             return None
 
     def _read_map_data_from_directory(self, directory):
@@ -157,3 +184,46 @@ class toorPIA:
                     file_content = f.read()
                     map_data[filename] = base64.b64encode(file_content).decode('utf-8')
         return map_data
+
+    def calculate_checksum(self, map_dir):
+        """マップデータのチェックサムを計算する"""
+        md5 = hashlib.md5()
+
+        # map_dir以下の全ファイルを取得
+        files = glob.glob(os.path.join(map_dir, '**/*'), recursive=True)
+
+        # ファイルパスでソートして順序を一定に保つ
+        sorted_files = sorted(files)
+
+        for file_path in sorted_files:
+            if os.path.isfile(file_path):
+                with open(file_path, 'rb') as f:
+                    file_content = f.read()
+                    md5.update(file_content)
+
+        return md5.hexdigest()
+
+    @pre_authentication
+    def compare_checksum(self, checksum):
+        """サーバーとチェックサムを比較する"""
+        headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+        data = {'checksum': checksum}
+
+        response = requests.post(f"{API_URL}/maps/compare-checksum", headers=headers, json=data)
+        
+        if response.status_code == 200:
+            try:
+                result = response.json()
+                if result['mapNo'] is not None:
+                    print(f"A matching map was found. Map No: {result['mapNo']}")
+                    return result['mapNo']
+                else:
+                    print("No matching map was found.")
+                    return None
+            except json.JSONDecodeError:
+                print(f"Failed to parse server response as JSON. Response content: {response.text}")
+                return None
+        else:
+            print(f"Checksum comparison failed. Status code: {response.status_code}")
+            print(f"Response content: {response.text}")
+            return None
