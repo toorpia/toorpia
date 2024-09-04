@@ -59,12 +59,18 @@ map_list = toorpia_client.list_map()
 ```python
 map_no = toorpia_client.mapNo  # Or any valid map number
 toorpia_client.export_map(map_no, "/path/to/export/directory")
+
+# Alternatively, you can use the alias 'download_map'
+toorpia_client.download_map(map_no, "/path/to/export/directory")
 ```
 
 #### 5. Importing a Map
 
 ```python
 new_map_no = toorpia_client.import_map("/path/to/import/directory")
+
+# Alternatively, you can use the alias 'upload_map'
+new_map_no = toorpia_client.upload_map("/path/to/import/directory")
 ```
 
 ## Environment Configuration
@@ -126,5 +132,14 @@ The client provides informative error messages for various scenarios, including 
 
 - Map exports may take some time, especially for large datasets.
 - For `addplot` operations, consider performance implications when working with large map data directories.
+
+## Function Aliases
+
+For convenience, some functions have aliases:
+
+- `import_map` can also be called as `upload_map`
+- `export_map` can also be called as `download_map`
+
+These aliases provide the same functionality as their original counterparts and can be used interchangeably.
 
 For more detailed information about specific methods and their parameters, refer to the inline documentation in the source code.

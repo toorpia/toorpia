@@ -150,6 +150,9 @@ class toorPIA:
             print(f"Response content: {response.text}")
             return None
 
+    # export_mapの別名としてdownload_mapを定義
+    download_map = export_map
+
     @pre_authentication
     def import_map(self, input_dir):
         """指定されたディレクトリからマップデータを読み込み、インポート（アップロード）する"""
@@ -182,6 +185,9 @@ class toorPIA:
             print(f"Response status code: {response.status_code}")
             print(f"Response content: {response.text}")
             return None
+
+    # import_mapの別名としてupload_mapを定義
+    upload_map = import_map
 
     def _read_map_data_from_directory(self, directory):
         """指定されたディレクトリからマップデータを読み込む"""
