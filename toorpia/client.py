@@ -58,12 +58,21 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def addplot(self, data, mapNo=None, mapDataDir=None):
+    def addplot(self, data, *args):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         data_json = data.to_json(orient='split')
         data_dict = json.loads(data_json)
         
+        mapNo = None
+        mapDataDir = None
+
+        for arg in args:
+            if isinstance(arg, int):
+                mapNo = arg
+            elif isinstance(arg, str):
+                mapDataDir = arg
+
         if mapDataDir is not None:
             map_no = self.import_map(mapDataDir)
             if map_no is not None:
@@ -128,7 +137,7 @@ class toorPIA:
                         f.write(file_content)
                         f.flush()  # バッファをフラッシュ
                         os.fsync(f.fileno())  # ファイルシステムに確実に書き込む
-                    print(f"Saved file: {file_path}")
+                    #print(f"Saved file: {file_path}")
                 except Exception as e:
                     print(f"Error saving file {filename}: {str(e)}")
             
@@ -215,10 +224,10 @@ class toorPIA:
             try:
                 result = response.json()
                 if result['mapNo'] is not None:
-                    print(f"A matching map was found. Map No: {result['mapNo']}")
+                    #print(f"A matching map was found. Map No: {result['mapNo']}")
                     return result['mapNo']
                 else:
-                    print("No matching map was found.")
+                    #print("No matching map was found.")
                     return None
             except json.JSONDecodeError:
                 print(f"Failed to parse server response as JSON. Response content: {response.text}")
