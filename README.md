@@ -31,6 +31,7 @@ import pandas as pd
 
 df = pd.read_csv("input.csv")
 results = toorpia_client.fit_transform(df)
+print(toorpia_client.shareUrl)  # Get the share URL for the created map
 ```
 
 #### 2. Adding Data to an Existing Map
@@ -40,6 +41,7 @@ df_add = pd.read_csv("add.csv")
 
 # Using the most recent map
 results_add = toorpia_client.addplot(df_add)
+print(toorpia_client.shareUrl)  # Get the share URL for the updated map
 
 # Using a specific map number
 results_add = toorpia_client.addplot(df_add, 123)
@@ -59,15 +61,34 @@ map_list = toorpia_client.list_map()
 ```python
 map_no = toorpia_client.mapNo  # Or any valid map number
 toorpia_client.export_map(map_no, "/path/to/export/directory")
-
 ```
 
 #### 5. Importing a Map
 
 ```python
 new_map_no = toorpia_client.import_map("/path/to/import/directory")
-
 ```
+
+### Share URL Feature
+
+Each operation that modifies a map (fit_transform, addplot, etc.) generates a share URL that can be accessed through the `shareUrl` property of the client. This URL provides access to a graphical user interface where you can visually inspect and interact with the map data.
+
+Example of accessing the share URL:
+```python
+# After creating or modifying a map
+print(toorpia_client.shareUrl)
+# Output: http://localhost:3000/map-inspector?seg=rawdata.csv&segHash=...
+```
+
+The share URL includes:
+- Links to the map data files (rawdata.csv, xy.dat, etc.)
+- Hash values for data integrity verification
+- Additional parameters for any added data (when using addplot)
+
+Opening this URL in a web browser will display an interactive visualization of your map data, allowing you to:
+- View the data distribution
+- Inspect data points
+- Analyze patterns and relationships in the data
 
 ## Environment Configuration
 

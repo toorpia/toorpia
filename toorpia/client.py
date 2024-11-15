@@ -22,6 +22,7 @@ def pre_authentication(method):
 class toorPIA:
     # 属性
     mapNo = None
+    shareUrl = None  # シェアURL用の属性を追加
 
     def __init__(self, api_key=None):
         self.api_key = api_key if api_key else get_api_key()
@@ -47,8 +48,10 @@ class toorPIA:
 
         response = requests.post(f"{API_URL}/data/fit_transform", json=data_dict, headers=headers)
         if response.status_code == 200:
-            baseXyData = response.json()['resdata']['baseXyData']
-            self.mapNo = response.json()['resdata']['mapNo']
+            response_data = response.json()
+            baseXyData = response_data['resdata']['baseXyData']
+            self.mapNo = response_data['resdata']['mapNo']
+            self.shareUrl = response_data.get('shareUrl')  # シェアURLを保存
 
             np_array = np.array(baseXyData)  # baseXyDataをNumPy配列に変換
             return np_array  # 変換したNumPy配列を返す
@@ -90,7 +93,9 @@ class toorPIA:
 
         response = requests.post(f"{API_URL}/data/addplot", json=data_dict, headers=headers)
         if response.status_code == 200:
-            addXyData = response.json()['resdata']
+            response_data = response.json()
+            addXyData = response_data['resdata']
+            self.shareUrl = response_data.get('shareUrl')  # シェアURLを保存
             np_array = np.array(addXyData) 
             return np_array 
         elif response.status_code == 400:
@@ -110,7 +115,9 @@ class toorPIA:
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
         response = requests.get(f"{API_URL}/maps", headers=headers)
         if response.status_code == 200:
-            return response.json()  # マップの一覧を返す
+            maps = response.json()
+            # 各マップにシェアURLが含まれている場合はそのまま返す
+            return maps
         else:
             error_message = response.json().get('message', 'Unknown error')  # エラーメッセージの取得
             print(f"Failed to list maps. Server responded with error: {error_message}")
@@ -123,7 +130,9 @@ class toorPIA:
         
         response = requests.get(f"{API_URL}/maps/export/{map_no}", headers=headers)
         if response.status_code == 200:
-            map_data = response.json().get('mapData', {})
+            response_data = response.json()
+            map_data = response_data.get('mapData', {})
+            self.shareUrl = response_data.get('shareUrl')  # シェアURLを保存
             
             # 出力ディレクトリが存在しない場合は作成
             os.makedirs(export_dir, exist_ok=True)
@@ -137,7 +146,6 @@ class toorPIA:
                         f.write(file_content)
                         f.flush()  # バッファをフラッシュ
                         os.fsync(f.fileno())  # ファイルシステムに確実に書き込む
-                    #print(f"Saved file: {file_path}")
                 except Exception as e:
                     print(f"Error saving file {filename}: {str(e)}")
             
@@ -176,9 +184,10 @@ class toorPIA:
         response = requests.post(f"{API_URL}/maps/import", headers=headers, json=data_to_send)
         
         if response.status_code == 201:
-            result = response.json()
-            print(f"Map imported successfully. New map number: {result['mapNo']}")
-            return result['mapNo']
+            response_data = response.json()
+            self.shareUrl = response_data.get('shareUrl')  # シェアURLを保存
+            print(f"Map imported successfully. New map number: {response_data['mapNo']}")
+            return response_data['mapNo']
         else:
             error_message = response.json().get('message', 'Unknown error')
             print(f"Failed to import map. Server responded with error: {error_message}")
@@ -230,10 +239,9 @@ class toorPIA:
             try:
                 result = response.json()
                 if result['mapNo'] is not None:
-                    #print(f"A matching map was found. Map No: {result['mapNo']}")
+                    self.shareUrl = result.get('shareUrl')  # シェアURLを保存
                     return result['mapNo']
                 else:
-                    #print("No matching map was found.")
                     return None
             except json.JSONDecodeError:
                 print(f"Failed to parse server response as JSON. Response content: {response.text}")
