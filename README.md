@@ -30,7 +30,18 @@ toorpia_client = toorPIA()
 import pandas as pd
 
 df = pd.read_csv("input.csv")
+# Basic usage
 results = toorpia_client.fit_transform(df)
+
+# Extended usage with metadata
+results = toorpia_client.fit_transform(
+    data=df,
+    label="Production Line 1 - Pressure Gauge",  # Optional: Name to identify the target equipment
+    tag="Pressure Sensor",  # Optional: Classification category for the map
+    description="Pressure gauge used in the 3rd process of Production Line 1. Model: ABC-123",  # Optional: Detailed description
+    random_seed=123  # Optional: Random seed for clustering (default: 42)
+)
+
 print(toorpia_client.shareUrl)  # Get the share URL for the created map
 ```
 

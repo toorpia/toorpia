@@ -39,12 +39,22 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def fit_transform(self, data):
+    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         # DataFrame形式で与えられたdataをJSON形式に変換して、バックエンドに送信する
         data_json = data.to_json(orient='split')  # split形式でJSON文字列に変換
         data_dict = json.loads(data_json)  # JSON文字列を辞書型に変換
+
+        # オプションパラメータを追加
+        if label is not None:
+            data_dict['label'] = label
+        if tag is not None:
+            data_dict['tag'] = tag
+        if description is not None:
+            data_dict['description'] = description
+        if random_seed != 42:
+            data_dict['randomSeed'] = random_seed
 
         response = requests.post(f"{API_URL}/data/fit_transform", json=data_dict, headers=headers)
         if response.status_code == 200:
