@@ -53,6 +53,7 @@ df_add = pd.read_csv("add.csv")
 # Using the most recent map
 results_add = toorpia_client.addplot(df_add)
 print(toorpia_client.shareUrl)  # Get the share URL for the updated map
+print(toorpia_client.currentAddPlotNo)  # Get the add plot number
 
 # Using a specific map number
 results_add = toorpia_client.addplot(df_add, 123)
@@ -61,7 +62,31 @@ results_add = toorpia_client.addplot(df_add, 123)
 results_add = toorpia_client.addplot(df_add, "/path/to/basemap/data/directory")
 ```
 
-#### 3. Listing Available Maps
+#### 3. Working with Add Plot History
+
+toorPIA now supports maintaining a history of add plots for each map. This allows you to track multiple add plot operations and access their results at any time.
+
+```python
+# List all add plots for a specific map
+add_plots = toorpia_client.list_addplots(toorpia_client.mapNo)
+print(f"Found {len(add_plots)} add plots for this map")
+
+# Get a specific add plot by its number
+add_plot_info = toorpia_client.get_addplot(toorpia_client.mapNo, 1)  # Get the first add plot
+
+# Access the add plot data
+xy_data = add_plot_info['xyData']  # NumPy array of coordinates
+add_plot_metadata = add_plot_info['addPlot']  # Metadata about the add plot
+share_url = add_plot_info['shareUrl']  # Share URL for this specific add plot
+
+# Iterate through all add plots
+if add_plots:
+    for add_plot in add_plots:
+        print(f"Add Plot #{add_plot['addPlotNo']} created at {add_plot['createdAt']}")
+        print(f"Records: {add_plot['nRecord']}")
+```
+
+#### 4. Listing Available Maps
 
 ```python
 map_list = toorpia_client.list_map()
@@ -151,6 +176,21 @@ toorpia_client.addplot(data)  # Uses most recent map
 toorpia_client.addplot(data, 123)  # Uses map number 123
 toorpia_client.addplot(data, "/path/to/map")  # Uses map data from the specified directory
 ```
+
+### Add Plot History Features
+
+The client now maintains a history of all add plot operations for each map:
+
+1. **Tracking Add Plot Numbers**: Each add plot operation receives a unique number within its map, accessible via the `currentAddPlotNo` property.
+
+2. **Listing Add Plots**: Use `list_addplots(map_no)` to retrieve all add plots for a specific map.
+
+3. **Retrieving Specific Add Plots**: Use `get_addplot(map_no, addplot_no)` to fetch details about a specific add plot, including its coordinates and metadata.
+
+These features enable more sophisticated analysis workflows, such as:
+- Comparing multiple datasets against the same base map
+- Tracking changes in data over time
+- Building a history of analysis operations for better reproducibility
 
 ## Error Handling
 

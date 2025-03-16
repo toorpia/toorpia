@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='toorpia',
-    version='0.2.0',
+    version='0.3.0',
     author='toor Inc.',
     author_email='takaeda@toor.jpn.com',
     description='A client library for accessing the toorPIA high-dimensional data analysis API',
