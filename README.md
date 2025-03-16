@@ -99,11 +99,15 @@ map_no = toorpia_client.mapNo  # Or any valid map number
 toorpia_client.export_map(map_no, "/path/to/export/directory")
 ```
 
+**Important Note**: The export operation only includes base map files. Add plot files are excluded from the export. If your map includes add plots, you'll need to recreate them after importing the map.
+
 #### 5. Importing a Map
 
 ```python
 new_map_no = toorpia_client.import_map("/path/to/import/directory")
 ```
+
+**Important Note**: The import operation only processes base map files. Any add plot files in the directory will be ignored. After importing a map, you must recreate any add plots using the `addplot` method.
 
 ### Share URL Feature
 
@@ -161,6 +165,21 @@ Set the API server URL using the `TOORPIA_API_URL` environment variable:
 ### Checksum Calculation and Comparison
 
 The client automatically calculates checksums for map data during import and export operations. This ensures data integrity and prevents unnecessary uploads of duplicate data.
+
+**Note about checksums**: The checksum calculation now excludes add plot files and log files. Only base map files (including clustering-related files) are considered when computing checksums. This ensures consistent checksums for the same base map, regardless of any add plot operations performed.
+
+### Base Map Types
+
+toorPIA supports two types of base maps:
+
+1. **Standard Analysis Maps**: Include simple files like `segments.csv`, `xy.dat`, `status.mi`, and `rawdata.csv`.
+
+2. **Clustering Analysis Maps**: Generated for larger datasets, these include additional files:
+   - Seed files (`seed-segments.csv`, `seed-xy.dat`)
+   - Multiple cluster files (`raw-x*.csv`, `segments-x*.csv`, `xy-x*.dat`)
+   - Header files and other clustering data
+
+Export and import operations handle both types appropriately, preserving all necessary files for the base map while excluding add plot data.
 
 ### Flexible Map Selection in addplot
 
