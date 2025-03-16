@@ -138,7 +138,23 @@ class toorPIA:
 
     @pre_authentication
     def export_map(self, map_no, export_dir):
-        """指定されたマップをエクスポート（ダウンロード）し、指定されたディレクトリに保存する"""
+        """
+        指定されたマップをエクスポート（ダウンロード）し、指定されたディレクトリに保存する
+        
+        注意: このメソッドはベースマップファイルのみをエクスポートします。
+        追加プロットファイル (segments-add-*.csv, xy-add-*.dat, rawdata_add_*.csv) や
+        ログファイル (*.log) は除外されます。クラスタリング解析で生成された
+        全てのファイルはベースマップの一部として含まれます。
+        
+        エクスポートされたマップをインポートした後、追加プロットは再作成する必要があります。
+        
+        Args:
+            map_no: エクスポートするマップ番号
+            export_dir: エクスポートしたファイルを保存するディレクトリ
+            
+        Returns:
+            エクスポートされたマップデータを含む辞書またはエクスポートに失敗した場合はNone
+        """
         headers = {'session-key': self.session_key}
         
         response = requests.get(f"{API_URL}/maps/export/{map_no}", headers=headers)
@@ -176,7 +192,24 @@ class toorPIA:
 
     @pre_authentication
     def import_map(self, input_dir):
-        """指定されたディレクトリからマップデータを読み込み、インポート（アップロード）する"""
+        """
+        指定されたディレクトリからマップデータを読み込み、インポート（アップロード）する
+        
+        注意: このメソッドはベースマップファイルのみをインポートします。
+        追加プロットファイル (segments-add-*.csv, xy-add-*.dat, rawdata_add_*.csv) や
+        ログファイル (*.log) は除外されます。クラスタリング解析で生成された
+        全てのファイルはベースマップの一部として含まれます。
+        
+        ディレクトリに追加プロットファイルが含まれていても、それらはインポートされず、
+        インポート後にaddplotメソッドを使用して再作成する必要があります。
+        
+        Args:
+            input_dir: インポートするマップファイルが含まれているディレクトリ
+            
+        Returns:
+            インポートされた新しいマップ番号、または既存のマップが見つかった場合はその番号
+            インポートに失敗した場合はNone
+        """
         # チェックサムの計算
         checksum = self.calculate_checksum(input_dir)
         
@@ -245,18 +278,50 @@ class toorPIA:
     upload_map = import_map
 
     def _read_map_data_from_directory(self, directory):
-        """指定されたディレクトリからマップデータを読み込む"""
+        """
+        指定されたディレクトリからマップデータを読み込む
+        
+        注意: このメソッドはベースマップファイルのみを読み込みます。
+        追加プロットファイル (segments-add-*.csv, xy-add-*.dat, rawdata_add_*.csv) や
+        ログファイル (*.log) は除外されます。クラスタリング解析で生成された
+        全てのファイルはベースマップの一部として含まれます。
+        """
         map_data = {}
         for filename in os.listdir(directory):
-            file_path = os.path.join(directory, filename)
-            if os.path.isfile(file_path):
-                with open(file_path, 'rb') as f:
-                    file_content = f.read()
-                    map_data[filename] = base64.b64encode(file_content).decode('utf-8')
+            # 追加プロットファイルとログファイルを除外
+            if (not filename.startswith('segments-add-') and
+                not filename.startswith('xy-add-') and 
+                not filename.startswith('rawdata_add_') and
+                not filename.endswith('.log')):
+                
+                file_path = os.path.join(directory, filename)
+                if os.path.isfile(file_path):
+                    with open(file_path, 'rb') as f:
+                        file_content = f.read()
+                        map_data[filename] = base64.b64encode(file_content).decode('utf-8')
+        
+        # ディレクトリ内に追加プロットファイルが存在する場合警告を表示
+        all_files = os.listdir(directory)
+        add_plot_files = [f for f in all_files if 
+                           f.startswith('segments-add-') or 
+                           f.startswith('xy-add-') or 
+                           f.startswith('rawdata_add_')]
+        
+        if add_plot_files:
+            print(f"Warning: {len(add_plot_files)} add plot related files were found but not included in the import/export.")
+            print("Add plots must be recreated after importing the map.")
+            
         return map_data
 
     def calculate_checksum(self, map_dir):
-        """マップデータのチェックサムを計算する"""
+        """
+        マップデータのチェックサムを計算する
+        
+        注意: このメソッドはベースマップファイルのみを対象とします。
+        追加プロットファイル (segments-add-*.csv, xy-add-*.dat, rawdata_add_*.csv) や
+        ログファイル (*.log) は除外されます。クラスタリング解析で生成された
+        全てのファイルはベースマップの一部として含まれます。
+        """
         md5 = hashlib.md5()
 
         # map_dir以下の全ファイルを取得
@@ -265,11 +330,18 @@ class toorPIA:
         # ファイルパスでソートして順序を一定に保つ
         sorted_files = sorted(files)
 
+        # 追加プロット関連ファイルとログファイルを除外
         for file_path in sorted_files:
             if os.path.isfile(file_path):
-                with open(file_path, 'rb') as f:
-                    file_content = f.read()
-                    md5.update(file_content)
+                filename = os.path.basename(file_path)
+                # 追加プロットファイルとログファイルをスキップ
+                if (not filename.startswith('segments-add-') and
+                    not filename.startswith('xy-add-') and 
+                    not filename.startswith('rawdata_add_') and
+                    not filename.endswith('.log')):
+                    with open(file_path, 'rb') as f:
+                        file_content = f.read()
+                        md5.update(file_content)
 
         return md5.hexdigest()
 
