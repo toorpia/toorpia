@@ -23,6 +23,8 @@ class toorPIA:
     # 属性
     mapNo = None
     shareUrl = None  # シェアURL用の属性を追加
+    currentAddPlotNo = None  # 追加：現在の追加プロット番号
+    addPlots = None  # 追加：マップに関連する追加プロットのリスト
 
     def __init__(self, api_key=None):
         self.api_key = api_key if api_key else get_api_key()
@@ -105,6 +107,7 @@ class toorPIA:
         if response.status_code == 200:
             response_data = response.json()
             addXyData = response_data['resdata']
+            self.currentAddPlotNo = response_data.get('addPlotNo')  # 追加プロット番号を保存
             self.shareUrl = response_data.get('shareUrl')  # シェアURLを保存
             np_array = np.array(addXyData) 
             return np_array 
@@ -203,6 +206,39 @@ class toorPIA:
             print(f"Failed to import map. Server responded with error: {error_message}")
             print(f"Response status code: {response.status_code}")
             print(f"Response content: {response.text}")
+            return None
+
+    @pre_authentication
+    def list_addplots(self, map_no):
+        """指定されたマップの全追加プロット情報を取得する"""
+        headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+        response = requests.get(f"{API_URL}/maps/{map_no}/addplots", headers=headers)
+        if response.status_code == 200:
+            self.addPlots = response.json()
+            return self.addPlots
+        else:
+            error_message = response.json().get('message', 'Unknown error')
+            print(f"Failed to list add plots. Server responded with error: {error_message}")
+            return None
+
+    @pre_authentication
+    def get_addplot(self, map_no, addplot_no):
+        """特定の追加プロット情報を取得する"""
+        headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+        response = requests.get(f"{API_URL}/maps/{map_no}/addplots/{addplot_no}", headers=headers)
+        if response.status_code == 200:
+            result = response.json()
+            self.shareUrl = result.get('shareUrl')
+            # NumPy配列に変換して返す
+            np_array = np.array(result.get('xyData', []))
+            return {
+                'addPlot': result.get('addPlot'),
+                'xyData': np_array,
+                'shareUrl': self.shareUrl
+            }
+        else:
+            error_message = response.json().get('message', 'Unknown error')
+            print(f"Failed to get add plot. Server responded with error: {error_message}")
             return None
 
     # import_mapの別名としてupload_mapを定義
