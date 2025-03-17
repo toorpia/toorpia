@@ -273,6 +273,106 @@ class toorPIA:
             error_message = response.json().get('message', 'Unknown error')
             print(f"Failed to get add plot. Server responded with error: {error_message}")
             return None
+            
+    @pre_authentication
+    def get_addplot_features(self, map_no=None, addplot_no=None, use_tscore=False):
+        """
+        追加プロットの特徴量を分析して取得する
+        
+        Args:
+            map_no (int, optional): マップ番号。指定がない場合は現在のマップ番号を使用
+            addplot_no (int, optional): 追加プロット番号。指定がない場合は現在の追加プロット番号を使用
+            use_tscore (bool, optional): Tスコアを使用するかどうか（デフォルトはFalse、Zスコアを使用）
+        
+        Returns:
+            dict: 特徴量データの辞書。以下のキーを含む：
+                - features: 特徴量の配列。各要素は {'item': 項目名, 'average': 平均値, 'zscore'/'tscore': スコア値}
+                - scoreType: 'zscore' または 'tscore'（使用されたスコアタイプ）
+                - numRecords: 処理対象のレコード数
+                - mapNo: マップ番号
+                - addPlotNo: 追加プロット番号
+                - timestamp: 分析実行時のタイムスタンプ
+                
+            分析に失敗した場合はNoneを返す
+        """
+        # map_noとaddplot_noのチェック
+        if map_no is None:
+            if self.mapNo is None:
+                print("Error: Map number is not specified. Please provide a map_no or use fit_transform() first.")
+                return None
+            map_no = self.mapNo
+        
+        if addplot_no is None:
+            if self.currentAddPlotNo is None:
+                print("Error: Add plot number is not specified. Please provide an addplot_no or use addplot() first.")
+                return None
+            addplot_no = self.currentAddPlotNo
+        
+        # リクエストURLとヘッダーの準備
+        headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+        
+        # クエリパラメータの作成（Tスコア使用フラグ）
+        params = {}
+        if use_tscore:
+            params['tscore'] = 'true'
+        
+        # APIリクエスト
+        try:
+            response = requests.get(
+                f"{API_URL}/maps/{map_no}/addplots/{addplot_no}/features", 
+                headers=headers,
+                params=params
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result
+            else:
+                error_message = response.json().get('message', 'Unknown error')
+                print(f"Failed to get add plot features. Server responded with error: {error_message}")
+                print(f"Response status code: {response.status_code}")
+                return None
+        except requests.exceptions.RequestException as e:
+            print(f"Network error when requesting add plot features: {str(e)}")
+            return None
+        except json.JSONDecodeError:
+            print(f"Failed to parse server response as JSON. Response content: {response.text}")
+            return None
+    
+    def to_dataframe(self, feature_data):
+        """
+        特徴量分析結果をPandasのDataFrameに変換する
+        
+        Args:
+            feature_data (dict): get_addplot_features()の返り値
+            
+        Returns:
+            pandas.DataFrame: 特徴量データのDataFrame
+            変換に失敗した場合はNone
+        """
+        try:
+            import pandas as pd
+            
+            if not feature_data or 'features' not in feature_data:
+                print("Error: Invalid feature data. Cannot convert to DataFrame.")
+                return None
+            
+            # 特徴量データをDataFrameに変換
+            df = pd.DataFrame(feature_data['features'])
+            
+            # スコア列名を設定
+            score_type = feature_data.get('scoreType', 'zscore')
+            
+            # 列順序を調整
+            columns = ['item', 'average', score_type]
+            
+            return df[columns]
+        except ImportError:
+            print("Error: pandas is not installed. Please install pandas to use this feature.")
+            return None
+        except Exception as e:
+            print(f"Error converting feature data to DataFrame: {str(e)}")
+            return None
 
     # import_mapの別名としてupload_mapを定義
     upload_map = import_map
