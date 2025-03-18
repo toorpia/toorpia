@@ -124,7 +124,20 @@ class toorPIA:
 
     @pre_authentication
     def list_map(self):
-        """APIキーに関連付けられたマップの一覧を取得する"""
+        """
+        APIキーに関連付けられたマップの一覧を取得する
+        
+        Returns:
+            list: マップ情報のリスト。各マップは以下のフィールドを含む辞書です：
+                - mapNo: マップの識別番号
+                - createdAt: 作成日時
+                - nRecord: レコード数
+                - nDimension: 次元数
+                - label: マップの表示名（オプション）
+                - tag: マップの分類タグ（オプション）
+                - description: マップの詳細説明（オプション）
+                - shareUrl: マップの共有URL
+        """
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
         response = requests.get(f"{API_URL}/maps", headers=headers)
         if response.status_code == 200:
@@ -243,7 +256,29 @@ class toorPIA:
 
     @pre_authentication
     def list_addplots(self, map_no):
-        """指定されたマップの全追加プロット情報を取得する"""
+        """
+        指定されたマップの全追加プロット情報を取得する
+        
+        Args:
+            map_no: 追加プロット情報を取得するマップ番号
+            
+        Returns:
+            list: 追加プロット情報のリスト。各追加プロットは以下のフィールドを含む辞書です：
+                - addPlotId: 追加プロットのID
+                - mapId: 関連するマップのID
+                - addPlotNo: マップ内での追加プロット番号
+                - nRecord: レコード数
+                - label: 追加プロットのラベル（オプション）
+                - status: 追加プロットの正常・異常判定結果
+                      "normal"=正常, "abnormal"=異常, null=未評価
+                - segmentFile: セグメントファイル名
+                - xyFile: XY座標ファイル名
+                - rawDataFile: 元データファイル名
+                - createdAt: 作成日時
+                - updatedAt: 更新日時
+                - deletedAt: 削除日時（null=有効）
+                - shareUrl: この追加プロットを含むマップの共有URL
+        """
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
         response = requests.get(f"{API_URL}/maps/{map_no}/addplots", headers=headers)
         if response.status_code == 200:
@@ -256,7 +291,25 @@ class toorPIA:
 
     @pre_authentication
     def get_addplot(self, map_no, addplot_no):
-        """特定の追加プロット情報を取得する"""
+        """
+        特定の追加プロット情報を取得する
+        
+        Args:
+            map_no: 対象のマップ番号
+            addplot_no: 取得する追加プロットの番号
+            
+        Returns:
+            dict: 追加プロット情報を含む辞書。以下のキーを含みます：
+                - addPlot: 追加プロットのメタデータ（辞書）。以下のフィールドを含みます：
+                    * addPlotId: 追加プロットのID
+                    * addPlotNo: 追加プロット番号
+                    * label: 追加プロットのラベル（オプション）
+                    * status: 追加プロットの正常・異常判定結果
+                          "normal"=正常, "abnormal"=異常, null=未評価
+                    * その他の追加プロットメタデータ
+                - xyData: 座標データのNumPy配列（各行は[x, y]座標）
+                - shareUrl: 追加プロットの共有URL
+        """
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
         response = requests.get(f"{API_URL}/maps/{map_no}/addplots/{addplot_no}", headers=headers)
         if response.status_code == 200:
