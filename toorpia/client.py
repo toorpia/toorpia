@@ -41,8 +41,14 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42):
+    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42, weight_option_str=None, type_option_str=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+
+        # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
+        if weight_option_str is None or type_option_str is None:
+            auto_weight_option_str, auto_type_option_str = self._generate_type_weight_options(data)
+            weight_option_str = weight_option_str or auto_weight_option_str
+            type_option_str = type_option_str or auto_type_option_str
 
         # DataFrame形式で与えられたdataをJSON形式に変換して、バックエンドに送信する
         data_json = data.to_json(orient='split')  # split形式でJSON文字列に変換
@@ -57,6 +63,8 @@ class toorPIA:
             data_dict['description'] = description
         if random_seed != 42:
             data_dict['randomSeed'] = random_seed
+        data_dict['weight_option_str'] = weight_option_str
+        data_dict['type_option_str'] = type_option_str
 
         response = requests.post(f"{API_URL}/data/fit_transform", json=data_dict, headers=headers)
         if response.status_code == 200:
@@ -73,11 +81,21 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def addplot(self, data, *args):
+    def addplot(self, data, *args, weight_option_str=None, type_option_str=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+
+        # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
+        if weight_option_str is None or type_option_str is None:
+            auto_weight_option_str, auto_type_option_str = self._generate_type_weight_options(data)
+            weight_option_str = weight_option_str or auto_weight_option_str
+            type_option_str = type_option_str or auto_type_option_str
 
         data_json = data.to_json(orient='split')
         data_dict = json.loads(data_json)
+        
+        # 重み付けオプションと型オプションを設定
+        data_dict['weight_option_str'] = weight_option_str
+        data_dict['type_option_str'] = type_option_str
         
         mapNo = None
         mapDataDir = None
@@ -465,6 +483,61 @@ class toorPIA:
             print("Add plots must be recreated after importing the map.")
             
         return map_data
+
+    def _generate_type_weight_options(self, df):
+        """
+        DataFrameの各列のデータ型に基づいて、-w（重み）と-t（型）のオプション文字列を生成する
+        
+        Args:
+            df (pd.DataFrame): 型情報を取得するDataFrame
+        
+        Returns:
+            tuple: (weight_option_str, type_option_str) - 生成された-wと-tのオプション文字列
+        """
+        import pandas as pd
+
+        weight_options = []
+        type_options = []
+        
+        for i, col_name in enumerate(df.columns):
+            col_idx = i + 1  # 列インデックスは1から始まる
+            col_type = df[col_name].dtype
+            
+            # 型に基づいて適切なオプションを決定
+            if pd.api.types.is_datetime64_any_dtype(col_type):
+                type_options.append(f"{col_idx}:date")    # datetime64型用の設定
+                weight_options.append(f"{col_idx}:0")     # datetime64型の重みは0
+            
+            elif pd.api.types.is_float_dtype(col_type):
+                type_options.append(f"{col_idx}:float")   # float型用の設定
+                weight_options.append(f"{col_idx}:1")     # float型の重みは1
+            
+            elif pd.api.types.is_integer_dtype(col_type):
+                type_options.append(f"{col_idx}:int")     # int型用の設定
+                weight_options.append(f"{col_idx}:1")     # int型の重みは1
+            
+            elif pd.api.types.is_string_dtype(col_type) or pd.api.types.is_object_dtype(col_type):
+                type_options.append(f"{col_idx}:none")    # 文字列型用の設定
+                weight_options.append(f"{col_idx}:0")     # 文字列型の重みは0
+            
+            elif pd.api.types.is_categorical_dtype(col_type):
+                type_options.append(f"{col_idx}:enum")    # カテゴリ型用の設定
+                weight_options.append(f"{col_idx}:0")     # カテゴリ型の重みは0
+            
+            elif pd.api.types.is_bool_dtype(col_type):
+                type_options.append(f"{col_idx}:enum")    # ブール型用の設定
+                weight_options.append(f"{col_idx}:0")     # ブール型の重みは0
+            
+            else:
+                # その他の型は未サポートとして扱う
+                type_options.append(f"{col_idx}:none")
+                weight_options.append(f"{col_idx}:0")
+        
+        # コンマ区切りのオプション文字列を生成
+        weight_option_str = ",".join(weight_options) if weight_options else ""
+        type_option_str = ",".join(type_options) if type_options else ""
+        
+        return weight_option_str, type_option_str
 
     def calculate_checksum(self, map_dir):
         """
