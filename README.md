@@ -84,13 +84,27 @@ if add_plots:
     for add_plot in add_plots:
         print(f"Add Plot #{add_plot['addPlotNo']} created at {add_plot['createdAt']}")
         print(f"Records: {add_plot['nRecord']}")
+        print(f"Status: {add_plot.get('status', 'Unknown')}")  # Display normal/abnormal determination result
 ```
 
 #### 4. Listing Available Maps
 
 ```python
 map_list = toorpia_client.list_map()
+
+# Display metadata from the map list
+for map_item in map_list:
+    print(f"Map #{map_item['mapNo']}: {map_item.get('label', 'No label')}")
+    print(f"  Tag: {map_item.get('tag', 'No tag')}")
+    print(f"  Records: {map_item['nRecord']}")
+    print(f"  Description: {map_item.get('description', 'No description')}")
 ```
+
+The returned map data includes the following metadata in addition to the basic identification information:
+- `label`: Display name of the map
+- `tag`: Classification tag for the map
+- `description`: Detailed description of the map
+You can use these metadata to efficiently organize and search for maps.
 
 #### 4. Exporting a Map
 

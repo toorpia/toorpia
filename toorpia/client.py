@@ -41,8 +41,14 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42):
+    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42, weight_option_str=None, type_option_str=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+
+        # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
+        if weight_option_str is None or type_option_str is None:
+            auto_weight_option_str, auto_type_option_str = self._generate_type_weight_options(data)
+            weight_option_str = weight_option_str or auto_weight_option_str
+            type_option_str = type_option_str or auto_type_option_str
 
         # DataFrame形式で与えられたdataをJSON形式に変換して、バックエンドに送信する
         data_json = data.to_json(orient='split')  # split形式でJSON文字列に変換
@@ -57,6 +63,8 @@ class toorPIA:
             data_dict['description'] = description
         if random_seed != 42:
             data_dict['randomSeed'] = random_seed
+        data_dict['weight_option_str'] = weight_option_str
+        data_dict['type_option_str'] = type_option_str
 
         response = requests.post(f"{API_URL}/data/fit_transform", json=data_dict, headers=headers)
         if response.status_code == 200:
@@ -73,11 +81,21 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def addplot(self, data, *args):
+    def addplot(self, data, *args, weight_option_str=None, type_option_str=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+
+        # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
+        if weight_option_str is None or type_option_str is None:
+            auto_weight_option_str, auto_type_option_str = self._generate_type_weight_options(data)
+            weight_option_str = weight_option_str or auto_weight_option_str
+            type_option_str = type_option_str or auto_type_option_str
 
         data_json = data.to_json(orient='split')
         data_dict = json.loads(data_json)
+        
+        # 重み付けオプションと型オプションを設定
+        data_dict['weight_option_str'] = weight_option_str
+        data_dict['type_option_str'] = type_option_str
         
         mapNo = None
         mapDataDir = None
@@ -124,7 +142,20 @@ class toorPIA:
 
     @pre_authentication
     def list_map(self):
-        """APIキーに関連付けられたマップの一覧を取得する"""
+        """
+        APIキーに関連付けられたマップの一覧を取得する
+        
+        Returns:
+            list: マップ情報のリスト。各マップは以下のフィールドを含む辞書です：
+                - mapNo: マップの識別番号
+                - createdAt: 作成日時
+                - nRecord: レコード数
+                - nDimension: 次元数
+                - label: マップの表示名（オプション）
+                - tag: マップの分類タグ（オプション）
+                - description: マップの詳細説明（オプション）
+                - shareUrl: マップの共有URL
+        """
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
         response = requests.get(f"{API_URL}/maps", headers=headers)
         if response.status_code == 200:
@@ -243,7 +274,29 @@ class toorPIA:
 
     @pre_authentication
     def list_addplots(self, map_no):
-        """指定されたマップの全追加プロット情報を取得する"""
+        """
+        指定されたマップの全追加プロット情報を取得する
+        
+        Args:
+            map_no: 追加プロット情報を取得するマップ番号
+            
+        Returns:
+            list: 追加プロット情報のリスト。各追加プロットは以下のフィールドを含む辞書です：
+                - addPlotId: 追加プロットのID
+                - mapId: 関連するマップのID
+                - addPlotNo: マップ内での追加プロット番号
+                - nRecord: レコード数
+                - label: 追加プロットのラベル（オプション）
+                - status: 追加プロットの正常・異常判定結果
+                      "normal"=正常, "abnormal"=異常, null=未評価
+                - segmentFile: セグメントファイル名
+                - xyFile: XY座標ファイル名
+                - rawDataFile: 元データファイル名
+                - createdAt: 作成日時
+                - updatedAt: 更新日時
+                - deletedAt: 削除日時（null=有効）
+                - shareUrl: この追加プロットを含むマップの共有URL
+        """
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
         response = requests.get(f"{API_URL}/maps/{map_no}/addplots", headers=headers)
         if response.status_code == 200:
@@ -256,7 +309,25 @@ class toorPIA:
 
     @pre_authentication
     def get_addplot(self, map_no, addplot_no):
-        """特定の追加プロット情報を取得する"""
+        """
+        特定の追加プロット情報を取得する
+        
+        Args:
+            map_no: 対象のマップ番号
+            addplot_no: 取得する追加プロットの番号
+            
+        Returns:
+            dict: 追加プロット情報を含む辞書。以下のキーを含みます：
+                - addPlot: 追加プロットのメタデータ（辞書）。以下のフィールドを含みます：
+                    * addPlotId: 追加プロットのID
+                    * addPlotNo: 追加プロット番号
+                    * label: 追加プロットのラベル（オプション）
+                    * status: 追加プロットの正常・異常判定結果
+                          "normal"=正常, "abnormal"=異常, null=未評価
+                    * その他の追加プロットメタデータ
+                - xyData: 座標データのNumPy配列（各行は[x, y]座標）
+                - shareUrl: 追加プロットの共有URL
+        """
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
         response = requests.get(f"{API_URL}/maps/{map_no}/addplots/{addplot_no}", headers=headers)
         if response.status_code == 200:
@@ -272,6 +343,106 @@ class toorPIA:
         else:
             error_message = response.json().get('message', 'Unknown error')
             print(f"Failed to get add plot. Server responded with error: {error_message}")
+            return None
+            
+    @pre_authentication
+    def get_addplot_features(self, map_no=None, addplot_no=None, use_tscore=False):
+        """
+        追加プロットの特徴量を分析して取得する
+        
+        Args:
+            map_no (int, optional): マップ番号。指定がない場合は現在のマップ番号を使用
+            addplot_no (int, optional): 追加プロット番号。指定がない場合は現在の追加プロット番号を使用
+            use_tscore (bool, optional): Tスコアを使用するかどうか（デフォルトはFalse、Zスコアを使用）
+        
+        Returns:
+            dict: 特徴量データの辞書。以下のキーを含む：
+                - features: 特徴量の配列。各要素は {'item': 項目名, 'average': 平均値, 'zscore'/'tscore': スコア値}
+                - scoreType: 'zscore' または 'tscore'（使用されたスコアタイプ）
+                - numRecords: 処理対象のレコード数
+                - mapNo: マップ番号
+                - addPlotNo: 追加プロット番号
+                - timestamp: 分析実行時のタイムスタンプ
+                
+            分析に失敗した場合はNoneを返す
+        """
+        # map_noとaddplot_noのチェック
+        if map_no is None:
+            if self.mapNo is None:
+                print("Error: Map number is not specified. Please provide a map_no or use fit_transform() first.")
+                return None
+            map_no = self.mapNo
+        
+        if addplot_no is None:
+            if self.currentAddPlotNo is None:
+                print("Error: Add plot number is not specified. Please provide an addplot_no or use addplot() first.")
+                return None
+            addplot_no = self.currentAddPlotNo
+        
+        # リクエストURLとヘッダーの準備
+        headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+        
+        # クエリパラメータの作成（Tスコア使用フラグ）
+        params = {}
+        if use_tscore:
+            params['tscore'] = 'true'
+        
+        # APIリクエスト
+        try:
+            response = requests.get(
+                f"{API_URL}/maps/{map_no}/addplots/{addplot_no}/features", 
+                headers=headers,
+                params=params
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result
+            else:
+                error_message = response.json().get('message', 'Unknown error')
+                print(f"Failed to get add plot features. Server responded with error: {error_message}")
+                print(f"Response status code: {response.status_code}")
+                return None
+        except requests.exceptions.RequestException as e:
+            print(f"Network error when requesting add plot features: {str(e)}")
+            return None
+        except json.JSONDecodeError:
+            print(f"Failed to parse server response as JSON. Response content: {response.text}")
+            return None
+    
+    def to_dataframe(self, feature_data):
+        """
+        特徴量分析結果をPandasのDataFrameに変換する
+        
+        Args:
+            feature_data (dict): get_addplot_features()の返り値
+            
+        Returns:
+            pandas.DataFrame: 特徴量データのDataFrame
+            変換に失敗した場合はNone
+        """
+        try:
+            import pandas as pd
+            
+            if not feature_data or 'features' not in feature_data:
+                print("Error: Invalid feature data. Cannot convert to DataFrame.")
+                return None
+            
+            # 特徴量データをDataFrameに変換
+            df = pd.DataFrame(feature_data['features'])
+            
+            # スコア列名を設定
+            score_type = feature_data.get('scoreType', 'zscore')
+            
+            # 列順序を調整
+            columns = ['item', 'average', score_type]
+            
+            return df[columns]
+        except ImportError:
+            print("Error: pandas is not installed. Please install pandas to use this feature.")
+            return None
+        except Exception as e:
+            print(f"Error converting feature data to DataFrame: {str(e)}")
             return None
 
     # import_mapの別名としてupload_mapを定義
@@ -312,6 +483,61 @@ class toorPIA:
             print("Add plots must be recreated after importing the map.")
             
         return map_data
+
+    def _generate_type_weight_options(self, df):
+        """
+        DataFrameの各列のデータ型に基づいて、-w（重み）と-t（型）のオプション文字列を生成する
+        
+        Args:
+            df (pd.DataFrame): 型情報を取得するDataFrame
+        
+        Returns:
+            tuple: (weight_option_str, type_option_str) - 生成された-wと-tのオプション文字列
+        """
+        import pandas as pd
+
+        weight_options = []
+        type_options = []
+        
+        for i, col_name in enumerate(df.columns):
+            col_idx = i + 1  # 列インデックスは1から始まる
+            col_type = df[col_name].dtype
+            
+            # 型に基づいて適切なオプションを決定
+            if pd.api.types.is_datetime64_any_dtype(col_type):
+                type_options.append(f"{col_idx}:date")    # datetime64型用の設定
+                weight_options.append(f"{col_idx}:0")     # datetime64型の重みは0
+            
+            elif pd.api.types.is_float_dtype(col_type):
+                type_options.append(f"{col_idx}:float")   # float型用の設定
+                weight_options.append(f"{col_idx}:1")     # float型の重みは1
+            
+            elif pd.api.types.is_integer_dtype(col_type):
+                type_options.append(f"{col_idx}:int")     # int型用の設定
+                weight_options.append(f"{col_idx}:1")     # int型の重みは1
+            
+            elif pd.api.types.is_string_dtype(col_type) or pd.api.types.is_object_dtype(col_type):
+                type_options.append(f"{col_idx}:none")    # 文字列型用の設定
+                weight_options.append(f"{col_idx}:0")     # 文字列型の重みは0
+            
+            elif pd.api.types.is_categorical_dtype(col_type):
+                type_options.append(f"{col_idx}:enum")    # カテゴリ型用の設定
+                weight_options.append(f"{col_idx}:0")     # カテゴリ型の重みは0
+            
+            elif pd.api.types.is_bool_dtype(col_type):
+                type_options.append(f"{col_idx}:enum")    # ブール型用の設定
+                weight_options.append(f"{col_idx}:0")     # ブール型の重みは0
+            
+            else:
+                # その他の型は未サポートとして扱う
+                type_options.append(f"{col_idx}:none")
+                weight_options.append(f"{col_idx}:0")
+        
+        # コンマ区切りのオプション文字列を生成
+        weight_option_str = ",".join(weight_options) if weight_options else ""
+        type_option_str = ",".join(type_options) if type_options else ""
+        
+        return weight_option_str, type_option_str
 
     def calculate_checksum(self, map_dir):
         """
