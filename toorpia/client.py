@@ -41,7 +41,7 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42, weight_option_str=None, type_option_str=None):
+    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
@@ -65,6 +65,15 @@ class toorPIA:
             data_dict['randomSeed'] = random_seed
         data_dict['weight_option_str'] = weight_option_str
         data_dict['type_option_str'] = type_option_str
+        
+        # identnaパラメータを追加
+        identna_params = {}
+        if identna_resolution is not None:
+            identna_params['resolution'] = identna_resolution
+        if identna_effective_radius is not None:
+            identna_params['effectiveRadius'] = identna_effective_radius
+        if identna_params:
+            data_dict['identnaParams'] = identna_params
 
         response = requests.post(f"{API_URL}/data/fit_transform", json=data_dict, headers=headers)
         if response.status_code == 200:
@@ -81,7 +90,7 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def addplot(self, data, *args, weight_option_str=None, type_option_str=None):
+    def addplot(self, data, *args, weight_option_str=None, type_option_str=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
@@ -96,6 +105,16 @@ class toorPIA:
         # 重み付けオプションと型オプションを設定
         data_dict['weight_option_str'] = weight_option_str
         data_dict['type_option_str'] = type_option_str
+        
+        # detabnパラメータを追加
+        if detabn_max_window is not None:
+            data_dict['detabn_max_window'] = detabn_max_window
+        if detabn_rate_threshold is not None:
+            data_dict['detabn_rate_threshold'] = detabn_rate_threshold
+        if detabn_threshold is not None:
+            data_dict['detabn_threshold'] = detabn_threshold
+        if detabn_print_score is not None:
+            data_dict['detabn_print_score'] = detabn_print_score
         
         mapNo = None
         mapDataDir = None
@@ -127,8 +146,20 @@ class toorPIA:
             addXyData = response_data['resdata']
             self.currentAddPlotNo = response_data.get('addPlotNo')  # 追加プロット番号を保存
             self.shareUrl = response_data.get('shareUrl')  # シェアURLを保存
-            np_array = np.array(addXyData) 
-            return np_array 
+            
+            # 座標データをNumPy配列に変換
+            np_array = np.array(addXyData)
+            
+            # 拡張された返り値：座標データと異常度情報を含む辞書を返す
+            result = {
+                'xyData': np_array,
+                'addPlotNo': self.currentAddPlotNo,
+                'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
+                'abnormalityScore': response_data.get('abnormalityScore'),    # 異常度スコア
+                'shareUrl': self.shareUrl
+            }
+            
+            return result
         elif response.status_code == 400:
             print("Error: Bad request. Both mapNo and mapData are missing.")
             return None
