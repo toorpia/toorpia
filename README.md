@@ -45,6 +45,22 @@ results = toorpia_client.fit_transform(
 print(toorpia_client.shareUrl)  # Get the share URL for the created map
 ```
 
+##### Advanced: Custom identna Parameters
+
+You can customize the normal area identification (identna) parameters when creating a base map:
+
+```python
+results = toorpia_client.fit_transform(
+    data=df,
+    identna_resolution=50,        # Mesh resolution (default: 100)
+    identna_effective_radius=0.15 # Effective radius ratio (default: 0.1)
+)
+```
+
+**identna Parameters:**
+- `identna_resolution`: Mesh resolution for normal area identification. Higher values provide finer granularity but require more computation.
+- `identna_effective_radius`: Effective radius as a ratio to the mesh area side length. Controls the influence radius around each data point.
+
 #### 2. Adding Data to an Existing Map
 
 ```python
@@ -61,6 +77,39 @@ results_add = toorpia_client.addplot(df_add, 123)
 # Using a map from a directory
 results_add = toorpia_client.addplot(df_add, "/path/to/basemap/data/directory")
 ```
+
+##### Advanced: Custom detabn Parameters for Abnormality Detection
+
+You can customize the abnormality detection (detabn) parameters when adding data:
+
+```python
+result = toorpia_client.addplot(
+    df_add,
+    detabn_max_window=3,        # Maximum window size (default: 5)
+    detabn_rate_threshold=0.5,  # Abnormality rate threshold (default: 1.0)
+    detabn_threshold=0.1,       # Normal area threshold (default: 0)
+    detabn_print_score=True     # Print score information (default: True)
+)
+
+# Access abnormality detection results
+print(f"Abnormality Status: {result['abnormalityStatus']}")  # 'normal', 'abnormal', or 'unknown'
+print(f"Abnormality Score: {result['abnormalityScore']}")    # Numerical score
+print(f"XY Data: {result['xyData'].shape}")                  # NumPy array of coordinates
+```
+
+**detabn Parameters:**
+- `detabn_max_window`: Maximum number of sequential data points used for abnormality rate calculation
+- `detabn_rate_threshold`: Lower threshold for abnormality rate (0.0 < rate <= 1.0). If rate >= threshold, data is considered abnormal
+- `detabn_threshold`: Threshold for relative normal area value. If value > threshold, the point is considered normal
+- `detabn_print_score`: Whether to include detailed score information in the analysis
+
+**Return Value Enhancement:**
+The `addplot` method now returns a dictionary containing:
+- `xyData`: NumPy array of coordinate data
+- `addPlotNo`: Sequential number of the add plot
+- `abnormalityStatus`: 'normal', 'abnormal', or 'unknown'
+- `abnormalityScore`: Numerical abnormality score
+- `shareUrl`: Share URL for the updated map
 
 #### 3. Working with Add Plot History
 
