@@ -24,7 +24,7 @@ toorpia_client = toorPIA()
 
 ### Basic Operations
 
-#### 1. Creating a Base Map
+#### 1. Creating a Base Map from CSV (Table) Data
 
 ```python
 import pandas as pd
@@ -61,7 +61,54 @@ results = toorpia_client.fit_transform(
 - `identna_resolution`: Mesh resolution for normal area identification. Higher values provide finer granularity but require more computation.
 - `identna_effective_radius`: Effective radius as a ratio to the mesh area side length. Controls the influence radius around each data point.
 
-#### 2. Adding Data to an Existing Map
+#### 2. Creating a Base Map from WAV (Sound) Data
+
+```python
+# Single WAV file processing
+results = toorpia_client.fit_transform_waveform(["audio_data.wav"])
+print(f"Map Number: {toorpia_client.mapNo}")
+print(f"Share URL: {toorpia_client.shareUrl}")
+
+# Multiple WAV files processing
+wav_files = ["audio1.wav", "audio2.wav", "audio3.wav"]
+results = toorpia_client.fit_transform_waveform(wav_files)
+
+# Advanced parameter customization
+results = toorpia_client.fit_transform_waveform(
+    files=["machine_sound.wav"],
+    mkfftseg_hp=100.0,        # High-pass filter: cut frequencies below 100Hz
+    mkfftseg_lp=8000.0,       # Low-pass filter: cut frequencies above 8kHz
+    mkfftseg_wl=32768,        # Window length: 32768 samples
+    mkfftseg_wf="hamming",    # Window function: Hamming window
+    mkfftseg_ol=75.0,         # Overlap ratio: 75%
+    identna_resolution=50,    # Mesh resolution: 50
+    label="Machine Sound Analysis",
+    tag="Acoustic Monitoring"
+)
+
+# Mixed processing with WAV and CSV files
+mixed_files = ["vibration_data.csv", "audio_data.wav"]
+results = toorpia_client.fit_transform_waveform(
+    files=mixed_files,
+    mkfftseg_sr=44100,        # Sample rate for CSV files
+    mkfftseg_di=3             # Use 3rd column of CSV as amplitude data
+)
+```
+
+##### mkfftSeg Parameters
+
+- `mkfftseg_di` (int): Data Index for CSV files (starting from 1, default: 1)
+- `mkfftseg_hp` (float): High-pass filter frequency in Hz (-1 to disable, default: -1.0)
+- `mkfftseg_lp` (float): Low-pass filter frequency in Hz (-1 to disable, default: -1.0)
+- `mkfftseg_nm` (int): Moving average window size (0 for auto-setting, default: 0)
+- `mkfftseg_ol` (float): Overlap ratio as percentage (default: 50.0)
+- `mkfftseg_sr` (int): Sample rate for CSV files (default: 48000)
+- `mkfftseg_wf` (str): Window function - "hanning" or "hamming" (default: "hanning")
+- `mkfftseg_wl` (int): Window length in samples (default: 65536)
+
+**Note**: For WAV files, the sample rate is automatically detected from the file header. For CSV files, you must specify the sample rate using `mkfftseg_sr` parameter.
+
+#### 3. Adding Data to an Existing Map
 
 ```python
 df_add = pd.read_csv("add.csv")
