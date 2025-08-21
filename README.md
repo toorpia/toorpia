@@ -158,7 +158,118 @@ The `addplot` method now returns a dictionary containing:
 - `abnormalityScore`: Numerical abnormality score
 - `shareUrl`: Share URL for the updated map
 
-#### 3. Working with Add Plot History
+#### 3.1. Adding WAV/CSV Data to an Existing Map (Waveform Addplot)
+
+For WAV and CSV files, you can add waveform data to an existing map using the `addplot_waveform` method. This is particularly useful for acoustic monitoring, vibration analysis, and time-series anomaly detection.
+
+```python
+# Basic usage - add WAV file to the most recent map
+result = toorpia_client.addplot_waveform(["new_audio.wav"])
+
+# Specify a target map number
+result = toorpia_client.addplot_waveform(["audio_data.wav"], mapNo=123)
+
+# Process multiple files
+wav_files = ["sample1.wav", "sample2.wav", "sample3.wav"]
+result = toorpia_client.addplot_waveform(wav_files)
+
+# Mixed file types (WAV + CSV)
+mixed_files = ["vibration.csv", "audio.wav"]
+result = toorpia_client.addplot_waveform(
+    files=mixed_files,
+    mkfftseg_sr=44100,  # Sample rate for CSV files
+    mkfftseg_di=2       # Use 2nd column of CSV as amplitude data
+)
+```
+
+##### Advanced Parameter Customization
+
+```python
+result = toorpia_client.addplot_waveform(
+    files=["machine_sound.wav"],
+    mapNo=toorpia_client.mapNo,  # Target map
+    
+    # mkfftSeg parameters (same as fit_transform_waveform)
+    mkfftseg_hp=200.0,           # High-pass filter: 200Hz
+    mkfftseg_lp=10000.0,         # Low-pass filter: 10kHz
+    mkfftseg_wl=16384,           # Window length: 16384 samples
+    mkfftseg_wf="hamming",       # Hamming window
+    mkfftseg_ol=75.0,            # 75% overlap
+    
+    # detabn parameters for abnormality detection
+    detabn_max_window=3,         # Maximum window size
+    detabn_rate_threshold=0.8,   # Abnormality rate threshold
+    detabn_threshold=0.1,        # Normal area threshold
+    detabn_print_score=True      # Include detailed scores
+)
+
+# Access comprehensive results
+print(f"Add Plot Number: {result['addPlotNo']}")
+print(f"Abnormality Status: {result['abnormalityStatus']}")  # 'normal', 'abnormal', 'unknown'
+print(f"Abnormality Score: {result['abnormalityScore']}")
+print(f"Coordinate Data Shape: {result['xyData'].shape}")
+print(f"Share URL: {result['shareUrl']}")
+```
+
+##### Practical Use Cases
+
+**Acoustic Monitoring Example:**
+```python
+# Create baseline from normal operation sounds
+baseline_files = ["normal_operation_1.wav", "normal_operation_2.wav"]
+baseline_result = toorpia_client.fit_transform_waveform(
+    files=baseline_files,
+    label="Machine Baseline - Normal Operation",
+    tag="Acoustic Monitoring"
+)
+
+# Add potentially abnormal sound for comparison
+test_result = toorpia_client.addplot_waveform(
+    files=["suspicious_sound.wav"],
+    mkfftseg_hp=100.0,  # Filter out low-frequency noise
+    mkfftseg_lp=8000.0, # Focus on relevant frequency range
+    detabn_rate_threshold=0.7  # Sensitive abnormality detection
+)
+
+if test_result['abnormalityStatus'] == 'abnormal':
+    print("⚠️  Abnormal sound detected!")
+    print(f"Abnormality score: {test_result['abnormalityScore']}")
+```
+
+**Vibration Analysis Example:**
+```python
+# Analyze vibration data from CSV files
+vibration_result = toorpia_client.addplot_waveform(
+    files=["vibration_sensor.csv"],
+    mkfftseg_di=3,      # Use 3rd column (acceleration data)
+    mkfftseg_sr=1000,   # 1kHz sampling rate
+    mkfftseg_wl=2048,   # Shorter window for vibration analysis
+    detabn_max_window=5 # Analyze 5-point sequences
+)
+```
+
+##### Return Value Details
+
+The `addplot_waveform` method returns a dictionary with the following keys:
+
+- **`xyData`**: NumPy array of 2D coordinates representing the processed waveform data
+- **`addPlotNo`**: Sequential number of this add plot within the target map
+- **`abnormalityStatus`**: Abnormality detection result ('normal', 'abnormal', or 'unknown')
+- **`abnormalityScore`**: Numerical abnormality score (lower values indicate more normal behavior)
+- **`shareUrl`**: Updated share URL including this add plot for Map Inspector visualization
+
+##### Parameter Reference
+
+**mkfftSeg Parameters**: Same as `fit_transform_waveform` (see Section 2 for details)
+
+**detabn Parameters**: Same as regular `addplot` (see Section 3 for details)
+
+**File Support**: 
+- WAV files: Automatic sample rate detection
+- CSV files: Requires `mkfftseg_sr` parameter
+- Mixed processing: Both file types in a single operation
+
+#### 3.2. Working with Add Plot History
 
 toorPIA now supports maintaining a history of add plots for each map. This allows you to track multiple add plot operations and access their results at any time.
 
