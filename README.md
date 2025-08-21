@@ -451,3 +451,152 @@ For convenience, some functions have aliases:
 These aliases provide the same functionality as their original counterparts and can be used interchangeably.
 
 For more detailed information about specific methods and their parameters, refer to the inline documentation in the source code.
+
+## Integrations
+
+### MCP Server for Claude Desktop
+
+toorPIA provides a Model Context Protocol (MCP) server that enables seamless integration with Claude Desktop. This allows you to perform all toorPIA operations directly through natural language conversations with Claude, without writing any Python code.
+
+#### Key Benefits
+
+- **Natural Language Interface**: Execute complex data analysis operations through conversational AI
+- **Complete Functionality**: Access all 11 toorPIA tools directly from Claude Desktop
+- **Real-time Analysis**: Immediate feedback and visualization of results
+- **No Programming Required**: Perfect for non-technical users and rapid prototyping
+- **Acoustic & Vibration Monitoring**: Advanced waveform processing capabilities built-in
+
+#### Available MCP Tools
+
+The MCP server provides the following tools that directly correspond to Python API methods:
+
+| MCP Tool | Python Method | Description |
+|----------|---------------|-------------|
+| `fit_transform` | `fit_transform()` | Create base map from DataFrame data |
+| `addplot` | `addplot()` | Add data to existing map with anomaly detection |
+| `fit_transform_waveform` | `fit_transform_waveform()` | Create base map from WAV/CSV files |
+| `addplot_waveform` | `addplot_waveform()` | Add waveform data with anomaly detection |
+| `list_map` | `list_map()` | List all available maps |
+| `list_addplots` | `list_addplots()` | List add plots for a specific map |
+| `get_addplot` | `get_addplot()` | Retrieve specific add plot data |
+| `get_addplot_features` | `get_addplot_features()` | Analyze add plot features |
+| `export_map` | `export_map()` | Export map to directory |
+| `import_map` | `import_map()` | Import map from directory |
+| `whoami` | N/A | Verify authentication status |
+
+#### Quick Setup
+
+1. **Install and build the MCP server:**
+   ```bash
+   cd mcp
+   npm install
+   npm run build
+   ```
+
+2. **Configure environment variables:**
+   ```bash
+   export TOORPIA_API_KEY="your-api-key"
+   export TOORPIA_API_URL="http://localhost:3000"  # Optional
+   ```
+
+3. **Add to Claude Desktop configuration** (`claude_desktop_config.json`):
+   ```json
+   {
+     "mcpServers": {
+       "toorpia": {
+         "command": "node",
+         "args": ["./path/to/toorpia/mcp/dist/index.js"],
+         "env": {
+           "TOORPIA_API_KEY": "your-api-key",
+           "TOORPIA_API_URL": "http://localhost:3000"
+         }
+       }
+     }
+   }
+   ```
+
+4. **Restart Claude Desktop** and start analyzing data with natural language!
+
+#### Usage Examples with Claude Desktop
+
+Once configured, you can use natural language to perform complex data analysis:
+
+**Creating a Base Map:**
+> "Please create a base map using the data from `/path/to/sensor_data.csv`. Label it as 'Production Line A - Temperature Sensors' and tag it as 'Temperature Monitoring'."
+
+**Acoustic Analysis:**
+> "Analyze the machine sound files in `/sounds/baseline/` to create a baseline map for acoustic monitoring. Use high-pass filtering at 100Hz and label it appropriately."
+
+**Anomaly Detection:**
+> "Add the suspicious audio file `/sounds/alerts/strange_noise.wav` to the current map and tell me if it shows any abnormal patterns. Use sensitive detection settings."
+
+**Data Exploration:**
+> "List all my maps and show me the details of the most recent one. Then show me all add plots for that map."
+
+**Advanced Waveform Analysis:**
+> "Process the vibration data in `/vibration/test_samples/` using a 2048 sample window with 75% overlap. Apply low-pass filtering at 5kHz and create a map labeled 'Bearing Analysis'."
+
+#### Configuration Details
+
+**Environment Variables:**
+- `TOORPIA_API_KEY`: Your toorPIA API key (required)
+- `TOORPIA_API_URL`: API server URL (optional, defaults to http://localhost:3000)
+
+**Claude Desktop Config Location:**
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux**: `~/.config/claude/claude_desktop_config.json`
+
+#### Advanced Features
+
+**DataFrame Processing:**
+The MCP server handles pandas DataFrame-compatible data in JSON format, automatically converting between Python's orient="split" format and Claude's natural language requests.
+
+**File Processing:**
+Both WAV audio files and CSV data files are supported with full parameter control for:
+- Filtering (high-pass, low-pass)
+- Windowing functions (Hanning, Hamming)
+- Sample rates and window lengths
+- Overlap ratios for spectral analysis
+
+**Abnormality Detection:**
+All add plot operations include comprehensive abnormality scoring with configurable thresholds for:
+- Maximum window analysis
+- Rate threshold detection
+- Normal area threshold comparison
+
+#### Troubleshooting
+
+**Common Issues:**
+
+1. **Authentication Failed:**
+   - Verify `TOORPIA_API_KEY` is set correctly
+   - Check API server is running at specified URL
+
+2. **Tool Not Found:**
+   - Ensure MCP server is built: `npm run build`
+   - Restart Claude Desktop after config changes
+
+3. **File Not Found:**
+   - Use absolute file paths in requests
+   - Ensure Claude Desktop has file system access permissions
+
+4. **Connection Issues:**
+   - Check `TOORPIA_API_URL` environment variable
+   - Verify toorPIA API server is accessible
+
+**For detailed setup instructions and troubleshooting:** See [mcp/README.md](./mcp/README.md)
+
+#### Development and Customization
+
+The MCP server is built with TypeScript and uses the official MCP SDK. The source code is available in the `/mcp` directory and can be customized for specific use cases.
+
+**Development Commands:**
+```bash
+cd mcp
+npm run dev      # Development mode with auto-reload
+npm run build    # Production build
+npm run start    # Run compiled server
+```
+
+This integration opens up powerful possibilities for combining toorPIA's advanced data analysis capabilities with Claude's natural language understanding, making sophisticated acoustic monitoring and anomaly detection accessible to users of all technical backgrounds.
