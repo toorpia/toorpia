@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "toorpia": {
+      "command": "node",
+      "args": ["./dist/index.js"],
+      "cwd": "/path/to/toorpia/mcp",
+      "env": {
+        "TOORPIA_API_KEY": "your-api-key",
+        "TOORPIA_API_URL": "http://localhost:3000"
+      }
+    }
+  }
+}
