@@ -2,56 +2,56 @@
 
 This is a Model Context Protocol (MCP) server that provides access to toorPIA API endpoints as MCP tools. It enables seamless integration of toorPIA's data analysis capabilities into applications supporting MCP, such as Claude Desktop.
 
-## 機能概要
+## Features Overview
 
-toorPIA MCPサーバーは、toorPIA APIの機能をMCPツールとして公開し、以下の操作を提供します：
+The toorPIA MCP server exposes toorPIA API functionality as MCP tools, providing the following operations:
 
-### データ分析機能
-- **fit_transform**: DataFrameからベースマップを作成
-- **addplot**: 既存マップにデータを追加（異常検知を含む）
-- **fit_transform_waveform**: WAV/CSVファイルからベースマップを作成
-- **addplot_waveform**: WAV/CSVファイルを既存マップに追加
+### Data Analysis Functions
+- **fit_transform**: Create base map from DataFrame data
+- **addplot**: Add data to existing map (including anomaly detection)
+- **fit_transform_waveform**: Create base map from WAV/CSV files
+- **addplot_waveform**: Add WAV/CSV files to existing map
 
-### マップ管理機能
-- **list_map**: 利用可能なマップの一覧表示
-- **export_map**: マップのエクスポート（ローカル保存）
-- **import_map**: マップのインポート（ローカルから読み込み）
+### Map Management Functions
+- **list_map**: List available maps
+- **export_map**: Export map (save locally)
+- **import_map**: Import map (load from local)
 
-### 追加プロット機能
-- **list_addplots**: マップの追加プロット一覧表示
-- **get_addplot**: 特定の追加プロットの詳細取得
-- **get_addplot_features**: 追加プロットの特徴量分析
+### Additional Plot Functions
+- **list_addplots**: List additional plots for a map
+- **get_addplot**: Get details of specific additional plot
+- **get_addplot_features**: Feature analysis of additional plots
 
-### 認証・ヘルス機能
-- **whoami**: 認証状態の確認
+### Authentication & Health Functions
+- **whoami**: Check authentication status
 
-## セットアップ
+## Setup
 
-### 1. 依存関係のインストール
+### 1. Install Dependencies
 
 ```bash
 cd mcp
 npm install
 ```
 
-### 2. TypeScriptのビルド
+### 2. Build TypeScript
 
 ```bash
 npm run build
 ```
 
-### 3. 環境変数の設定
+### 3. Environment Variables
 
-以下の環境変数を設定してください：
+Set the following environment variables:
 
 ```bash
 export TOORPIA_API_KEY="your-api-key-here"
-export TOORPIA_API_URL="http://localhost:3000"  # オプション（デフォルトは http://localhost:3000）
+export TOORPIA_API_URL="http://localhost:3000"  # Optional (default: http://localhost:3000)
 ```
 
-### 4. Claude Desktop との連携
+### 4. Claude Desktop Integration
 
-Claude Desktopの設定ファイル（通常`~/Library/Application Support/Claude/claude_desktop_config.json`）に以下を追加：
+Add the following to your Claude Desktop configuration file (typically `~/Library/Application Support/Claude/claude_desktop_config.json`):
 
 ```json
 {
@@ -69,149 +69,149 @@ Claude Desktopの設定ファイル（通常`~/Library/Application Support/Claud
 }
 ```
 
-**重要**: 
-- `/path/to/your/toorpia/mcp` を実際のパスに変更してください
-- `your-actual-api-key` を実際のAPIキーに変更してください
+**Important**: 
+- Replace `/path/to/your/toorpia/mcp` with the actual path
+- Replace `your-actual-api-key` with your actual API key
 
-## 利用可能なツール
+## Available Tools
 
-### データ処理系
+### Data Processing Tools
 
 #### fit_transform
-DataFrame（pandas orient='split'形式）からベースマップを作成します。
+Creates a base map from DataFrame data (pandas orient='split' format).
 
-**パラメータ:**
-- `data`: DataFrame（orient='split'形式）
-- `label`, `tag`, `description`: メタデータ（オプション）
-- `weight_option_str`, `type_option_str`: カラムの重み・型設定（オプション）
-- `identna_resolution`, `identna_effective_radius`: identnaパラメータ（オプション）
+**Parameters:**
+- `data`: DataFrame (orient='split' format)
+- `label`, `tag`, `description`: Metadata (optional)
+- `weight_option_str`, `type_option_str`: Column weight and type settings (optional)
+- `identna_resolution`, `identna_effective_radius`: identna parameters (optional)
 
 #### addplot
-既存のマップにDataFrameデータを追加し、異常検知を実行します。
+Adds DataFrame data to an existing map and performs anomaly detection.
 
-**パラメータ:**
-- `data`: DataFrame（orient='split'形式）
-- `mapNo`: 対象マップ番号（オプション、省略時は最後のfit_transformで作成されたマップを使用）
-- `detabn_*`: 異常検知パラメータ（オプション）
-- `mode`: 'xy'（座標データのみ）または'full'（全情報、デフォルト）
+**Parameters:**
+- `data`: DataFrame (orient='split' format)
+- `mapNo`: Target map number (optional, uses last fit_transform map if omitted)
+- `detabn_*`: Anomaly detection parameters (optional)
+- `mode`: 'xy' (coordinates only) or 'full' (complete information, default)
 
 #### fit_transform_waveform
-WAVまたはCSVファイルからベースマップを作成します。
+Creates a base map from WAV or CSV files.
 
-**パラメータ:**
-- `files`: ファイルパスの配列
-- `mkfftseg_*`: FFTセグメント化パラメータ（オプション）
-- `identna_*`: identnaパラメータ（オプション）
-- `label`, `tag`, `description`: メタデータ（オプション）
+**Parameters:**
+- `files`: Array of file paths
+- `mkfftseg_*`: FFT segmentation parameters (optional)
+- `identna_*`: identna parameters (optional)
+- `label`, `tag`, `description`: Metadata (optional)
 
 #### addplot_waveform
-WAVまたはCSVファイルを既存マップに追加し、異常検知を実行します。
+Adds WAV or CSV files to an existing map and performs anomaly detection.
 
-**パラメータ:**
-- `files`: ファイルパスの配列
-- `mapNo`: 対象マップ番号（オプション）
-- `mkfftseg_*`: FFTセグメント化パラメータ（オプション）
-- `detabn_*`: 異常検知パラメータ（オプション）
+**Parameters:**
+- `files`: Array of file paths
+- `mapNo`: Target map number (optional)
+- `mkfftseg_*`: FFT segmentation parameters (optional)
+- `detabn_*`: Anomaly detection parameters (optional)
 
-### マップ管理系
+### Map Management Tools
 
 #### list_map
-利用可能なマップの一覧を取得します。
+Retrieves a list of available maps.
 
 #### export_map
-指定されたマップをローカルディレクトリにエクスポートします。
+Exports a specified map to a local directory.
 
-**パラメータ:**
-- `mapNo`: エクスポートするマップ番号
-- `exportDir`: エクスポート先ディレクトリパス
+**Parameters:**
+- `mapNo`: Map number to export
+- `exportDir`: Export destination directory path
 
 #### import_map
-ローカルディレクトリからマップをインポートします。
+Imports a map from a local directory.
 
-**パラメータ:**
-- `inputDir`: インポート元ディレクトリパス
+**Parameters:**
+- `inputDir`: Import source directory path
 
-### 追加プロット管理系
+### Additional Plot Management Tools
 
 #### list_addplots
-指定されたマップの追加プロット一覧を取得します。
+Retrieves a list of additional plots for a specified map.
 
-**パラメータ:**
-- `mapNo`: 対象マップ番号
+**Parameters:**
+- `mapNo`: Target map number
 
 #### get_addplot
-特定の追加プロットの詳細情報を取得します。
+Retrieves detailed information about a specific additional plot.
 
-**パラメータ:**
-- `mapNo`: 対象マップ番号
-- `addplotNo`: 追加プロット番号
+**Parameters:**
+- `mapNo`: Target map number
+- `addplotNo`: Additional plot number
 
 #### get_addplot_features
-追加プロットの特徴量分析結果を取得します。
+Retrieves feature analysis results for an additional plot.
 
-**パラメータ:**
-- `mapNo`: 対象マップ番号
-- `addplotNo`: 追加プロット番号
-- `use_tscore`: Tスコアを使用するかどうか（デフォルト: false、Zスコア使用）
+**Parameters:**
+- `mapNo`: Target map number
+- `addplotNo`: Additional plot number
+- `use_tscore`: Whether to use T-score (default: false, uses Z-score)
 
-## 開発・デバッグ
+## Development & Debugging
 
-### 開発モード
+### Development Mode
 ```bash
 npm run dev
 ```
 
-### ビルド
+### Build
 ```bash
 npm run build
 ```
 
-### 本番実行
+### Production Run
 ```bash
 npm start
 ```
 
-## client.pyとの対応関係
+## Correspondence with client.py
 
-このMCPサーバーは、toorPIA Python client.pyの機能をほぼ完全にカバーしています：
+This MCP server provides nearly complete coverage of the toorPIA Python client.py functionality:
 
-| Python client.py | MCP Tool | 説明 |
-|------------------|----------|------|
-| `fit_transform()` | `fit_transform` | DataFrameからベースマップ作成 |
-| `addplot()` | `addplot` | DataFrameの追加プロット |
-| `fit_transform_waveform()` | `fit_transform_waveform` | 波形ファイルからベースマップ作成 |
-| `addplot_waveform()` | `addplot_waveform` | 波形ファイルの追加プロット |
-| `list_map()` | `list_map` | マップ一覧取得 |
-| `export_map()` / `download_map()` | `export_map` | マップエクスポート |
-| `import_map()` / `upload_map()` | `import_map` | マップインポート |
-| `list_addplots()` | `list_addplots` | 追加プロット一覧取得 |
-| `get_addplot()` | `get_addplot` | 追加プロット詳細取得 |
-| `get_addplot_features()` | `get_addplot_features` | 特徴量分析 |
-| `authenticate()` | 自動実行 | 認証（各ツール実行時に自動実行） |
+| Python client.py | MCP Tool | Description |
+|------------------|----------|-------------|
+| `fit_transform()` | `fit_transform` | Create base map from DataFrame |
+| `addplot()` | `addplot` | DataFrame additional plot |
+| `fit_transform_waveform()` | `fit_transform_waveform` | Create base map from waveform files |
+| `addplot_waveform()` | `addplot_waveform` | Waveform file additional plot |
+| `list_map()` | `list_map` | List maps |
+| `export_map()` / `download_map()` | `export_map` | Export map |
+| `import_map()` / `upload_map()` | `import_map` | Import map |
+| `list_addplots()` | `list_addplots` | List additional plots |
+| `get_addplot()` | `get_addplot` | Get additional plot details |
+| `get_addplot_features()` | `get_addplot_features` | Feature analysis |
+| `authenticate()` | Auto-executed | Authentication (automatically executed on each tool run) |
 
-## 注意事項
+## Important Notes
 
-1. **ファイルパス**: 波形ファイル処理時は、MCPサーバーからアクセス可能なファイルパスを指定してください
-2. **認証**: 各ツール実行時に自動で認証が行われます（明示的な認証は不要）
-3. **セッション管理**: セッションキーは自動で管理されます
-4. **エラーハンドリング**: APIエラーはMCPツールのエラーとして適切に報告されます
+1. **File Paths**: When processing waveform files, specify file paths accessible from the MCP server
+2. **Authentication**: Authentication is performed automatically on each tool execution (no explicit authentication required)
+3. **Session Management**: Session keys are managed automatically
+4. **Error Handling**: API errors are properly reported as MCP tool errors
 
-## トラブルシューティング
+## Troubleshooting
 
-### 認証エラー
-- `TOORPIA_API_KEY` 環境変数が正しく設定されているか確認
-- APIキーが有効であることを確認
-- `whoami` ツールで認証状態を確認
+### Authentication Errors
+- Verify that the `TOORPIA_API_KEY` environment variable is set correctly
+- Confirm that the API key is valid
+- Check authentication status with the `whoami` tool
 
-### 接続エラー
-- `TOORPIA_API_URL` が正しいか確認
-- toorPIA APIサーバーが起動しているか確認
-- ネットワーク接続を確認
+### Connection Errors
+- Verify that `TOORPIA_API_URL` is correct
+- Confirm that the toorPIA API server is running
+- Check network connectivity
 
-### ファイルアクセスエラー
-- 指定したファイルパスが存在するか確認
-- MCPサーバーからファイルへの読み取り権限があるか確認
+### File Access Errors
+- Verify that the specified file path exists
+- Confirm that the MCP server has read permissions for the file
 
-## ライセンス
+## License
 
-このMCPサーバーは、toorPIA APIクライアントライブラリの一部として提供されています。
+This MCP server is provided as part of the toorPIA API client library.
