@@ -90,6 +90,124 @@ class toorPIA:
             return None
 
     @pre_authentication
+    def fit_transform_waveform(self, files, 
+                              # mkfftSeg parameters
+                              mkfftseg_di=1, mkfftseg_hp=-1.0, mkfftseg_lp=-1.0, 
+                              mkfftseg_nm=0, mkfftseg_ol=50.0, mkfftseg_sr=48000,
+                              mkfftseg_wf="hanning", mkfftseg_wl=65536,
+                              # identna parameters (same as existing)
+                              identna_resolution=None, identna_effective_radius=None,
+                              # metadata
+                              label=None, tag=None, description=None):
+        """
+        Process WAV or CSV files directly to generate base map
+        
+        Args:
+            files (list): List of WAV/CSV file paths
+            mkfftseg_di (int): Data Index (starting from 1, for CSV files)
+            mkfftseg_hp (float): High pass filter (-1 to disable)
+            mkfftseg_lp (float): Low pass filter (-1 to disable)
+            mkfftseg_nm (int): nMovingAverage (0 for auto-setting)
+            mkfftseg_ol (float): Overlap ratio (%)
+            mkfftseg_sr (int): Sample rate (for CSV files)
+            mkfftseg_wf (str): Window function ("hanning" or "hamming")
+            mkfftseg_wl (int): Window length
+            identna_resolution (int): Mesh resolution (default: 100)
+            identna_effective_radius (float): Effective radius ratio (default: 0.1)
+            label (str): Map label
+            tag (str): Map tag
+            description (str): Map description
+            
+        Returns:
+            numpy.ndarray: Coordinate data (each row is [x, y])
+        """
+        # File existence and format check
+        if not files or not isinstance(files, list):
+            print("Error: files must be a non-empty list of file paths")
+            return None
+        
+        files_to_upload = []
+        for file_path in files:
+            if not os.path.exists(file_path):
+                print(f"Error: File not found: {file_path}")
+                return None
+            
+            # File format check (.wav, .csv)
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext not in ['.wav', '.csv']:
+                print(f"Error: Unsupported file format: {ext}. Only .wav and .csv files are supported.")
+                return None
+            
+            files_to_upload.append(('files', open(file_path, 'rb')))
+        
+        try:
+            # Prepare mkfftSeg options in JSON format
+            mkfftseg_options = {
+                'di': int(mkfftseg_di),
+                'hp': float(mkfftseg_hp),
+                'lp': float(mkfftseg_lp),
+                'nm': int(mkfftseg_nm),
+                'ol': float(mkfftseg_ol),
+                'sr': int(mkfftseg_sr),
+                'wf': str(mkfftseg_wf),
+                'wl': int(mkfftseg_wl)
+            }
+            
+            # Prepare identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = float(identna_effective_radius)
+            
+            # Send as form-data
+            form_data = {
+                'mkfftseg_options': json.dumps(mkfftseg_options),
+                'identna_options': json.dumps(identna_params) if identna_params else '{}',
+                'label': label or '',
+                'tag': tag or '',
+                'description': description or ''
+            }
+            
+            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
+            response = requests.post(
+                f"{API_URL}/data/fit_transform_waveform", 
+                files=files_to_upload,
+                data=form_data,
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                baseXyData = response_data['resdata']['baseXyData']
+                self.mapNo = response_data['resdata']['mapNo']
+                self.shareUrl = response_data.get('shareUrl')  # Save share URL
+                
+                np_array = np.array(baseXyData)  # Convert baseXyData to NumPy array
+                return np_array  # Return converted NumPy array
+            else:
+                try:
+                    error_message = response.json().get('message', 'Unknown error')
+                except:
+                    error_message = f"HTTP {response.status_code}: {response.text}"
+                print(f"Waveform data transformation failed. Server responded with error: {error_message}")
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error during file upload: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"Error processing waveform files: {str(e)}")
+            return None
+        finally:
+            # Ensure file handles are closed
+            for _, file_handle in files_to_upload:
+                try:
+                    file_handle.close()
+                except:
+                    pass
+
+    @pre_authentication
     def addplot(self, data, *args, weight_option_str=None, type_option_str=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
