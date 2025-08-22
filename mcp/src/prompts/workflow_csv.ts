@@ -1,28 +1,28 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 
-const CSV_WORKFLOW_PROMPT = `# CSVデータ処理ワークフロー完全ガイド
+const CSV_WORKFLOW_PROMPT = `# CSV Data Processing Workflow Complete Guide
 
-toorPIA MCP サーバーのCSVワークフローは、インタラクティブなデータ分析パイプラインを提供します。
+The toorPIA MCP Server's CSV workflow provides an interactive data analysis pipeline.
 
-## CSVワークフロー: プレビュー → スキーマ調整 → 確定 → スクリプト生成 → 実行
+## CSV Workflow: Preview → Schema Adjustment → Finalize → Script Generation → Execution
 
-### ステップ1: ファイル確認と初期化
+### Step 1: File Verification and Initialization
 \`\`\`bash
-# ファイルの場所確認
-locate_file: ファイル存在確認と絶対パス取得
-- path: ファイルパス
-- baseDir (optional): ベースディレクトリ
+# File location verification
+locate_file: File existence check and absolute path retrieval
+- path: File path
+- baseDir (optional): Base directory
 
-detect_file_type: ファイル形式判定
-- path: ファイルパス
-- 戻り値: kind="csv" の場合のみCSVワークフローを続行
+detect_file_type: File format detection
+- path: File path
+- Return value: Continue CSV workflow only if kind="csv"
 
-# CSVプレビューとスキーマ初期化
-csv.preview: CSV構造の確認と自動型推論
-- path: 絶対ファイルパス（locate_fileで取得）
-- nRows: サンプル行数（default: 5）
+# CSV preview and schema initialization
+csv.preview: CSV structure verification and automatic type inference
+- path: Absolute file path (obtained from locate_file)
+- nRows: Number of sample rows (default: 5)
 
-戻り値例:
+Example return value:
 {
   "ok": true,
   "filePath": "/path/to/file.csv",
@@ -36,110 +36,110 @@ csv.preview: CSV構造の確認と自動型推論
 }
 \`\`\`
 
-### ステップ2: スキーマ調整（任意）
+### Step 2: Schema Adjustment (Optional)
 \`\`\`bash
-# カラムの設定変更
-csv.apply_schema_patch: カラム属性の変更
-- path: 絶対ファイルパス
-- patches: 変更内容の配列
-  - columnName: カラム名
+# Column configuration changes
+csv.apply_schema_patch: Column attribute modification
+- path: Absolute file path
+- patches: Array of modification details
+  - columnName: Column name
   - updates: 
     - type: "integer"|"number"|"boolean"|"datetime"|"string"
-    - weight: 重み値（0.0-1.0）
-    - use: 使用フラグ（true/false）
-    - description: 説明（任意）
+    - weight: Weight value (0.0-1.0)
+    - use: Usage flag (true/false)
+    - description: Description (optional)
 
-# 現在のスキーマ確認
-csv.get_schema: スキーマ状態の取得
-- path: 絶対ファイルパス
+# Current schema verification
+csv.get_schema: Schema state retrieval
+- path: Absolute file path
 \`\`\`
 
-### ステップ3: スクリプト生成
+### Step 3: Script Generation
 \`\`\`bash
-csv.generate_runner: toorPIA準拠Pythonスクリプト生成
-- path: 絶対ファイルパス
-- outputPath: 出力パス（任意）
+csv.generate_runner: toorPIA-compliant Python script generation
+- path: Absolute file path
+- outputPath: Output path (optional)
 
-# 自動生成される内容:
-# - CSV_PATH: ファイルパス
-# - DROP_COLUMNS: use:false または weight:0 のカラム
-# - toorPIA().fit_transform(df) 呼び出し
+# Auto-generated content:
+# - CSV_PATH: File path
+# - DROP_COLUMNS: Columns with use:false or weight:0
+# - toorPIA().fit_transform(df) invocation
 \`\`\`
 
-### ステップ4: スクリプト実行
+### Step 4: Script Execution
 \`\`\`bash
-csv.run_runner: Pythonスクリプトの同期実行
-- scriptContent: 実行するPythonコード
+csv.run_runner: Synchronous Python script execution
+- scriptContent: Python code to execute
 
-# 前提条件:
-# - python3 コマンドが利用可能
-# - toorpia パッケージがインストール済み
-# - TOORPIA_API_KEY 環境変数が設定済み
+# Prerequisites:
+# - python3 command available
+# - toorpia package installed
+# - TOORPIA_API_KEY environment variable set
 
-戻り値:
+Return value:
 {
   "ok": true,
-  "stdout": "実行結果...",
-  "stderr": "エラー出力...",
+  "stdout": "Execution results...",
+  "stderr": "Error output...",
   "exitCode": 0
 }
 \`\`\`
 
-## 型推論システム
+## Type Inference System
 
-CSVワークフローは以下の自動型推論を実行：
+The CSV workflow performs the following automatic type inference:
 
-### サポートされている型
-- **integer**: 整数値
-- **number**: 浮動小数点数
-- **boolean**: true/false, 1/0, yes/no パターン
-- **datetime**: Date.parse()成功かつ日時パターン
-- **string**: その他の文字列データ
+### Supported Types
+- **integer**: Integer values
+- **number**: Floating-point numbers
+- **boolean**: true/false, 1/0, yes/no patterns
+- **datetime**: Date.parse() success with datetime patterns
+- **string**: Other string data
 
-### デフォルト重み
+### Default Weights
 - integer/number: 1.0
 - datetime: 0.8  
 - boolean: 0.6
 - string: 0.5
 
-## エラーハンドリング
+## Error Handling
 
-統一されたエラーレスポンス形式 \`{ ok: false, code, reason }\`：
+Unified error response format \`{ ok: false, code, reason }\`:
 
-- **NOT_FOUND**: ファイルまたはデータが見つからない
-- **SCHEMA_NOT_INITIALIZED**: スキーマが初期化されていない
-- **SCHEMA_NOT_READY**: スキーマの準備が未完了
-- **UNKNOWN_COLUMN**: 指定されたカラムが存在しない
-- **RUNTIME_ERROR**: 実行時エラー
-- **PYTHON_NOT_FOUND**: Python環境が見つからない
+- **NOT_FOUND**: File or data not found
+- **SCHEMA_NOT_INITIALIZED**: Schema not initialized
+- **SCHEMA_NOT_READY**: Schema preparation incomplete
+- **UNKNOWN_COLUMN**: Specified column does not exist
+- **RUNTIME_ERROR**: Runtime error
+- **PYTHON_NOT_FOUND**: Python environment not found
 
-## レガシーツール（下位互換性）
+## Legacy Tools (Backward Compatibility)
 
-従来の fit_transform と addplot ツールも引き続き利用可能：
-- fit_transform: pandas orient="split" データから直接マップ作成
-- addplot: 既存マップへのデータ追加
+Traditional fit_transform and addplot tools remain available:
+- fit_transform: Direct map creation from pandas orient="split" data
+- addplot: Data addition to existing maps
 
-## WAVワークフロー
+## WAV Workflow
 
-WAVファイル処理については、現在開発中です。
-detect_file_type で kind="wav" が検出された場合は、以下をご確認ください：
+WAV file processing is currently under development.
+When detect_file_type detects kind="wav", please check the following:
 
-- WAVファイル処理機能は workflow_wav プロンプトを参照
-- 現在は基本的な検出機能のみ実装済み
-- フル機能は ENABLE_WAV 環境変数で制御
+- WAV file processing functionality: refer to workflow_wav prompt
+- Currently only basic detection functionality is implemented
+- Full functionality is controlled by ENABLE_WAV environment variable
 
-## 使用例
+## Usage Example
 
-testdata/sensor_log.csv を使用したサンプルワークフロー：
+Sample workflow using testdata/sensor_log.csv:
 
-1. \`locate_file\` でファイルパスを確認
-2. \`detect_file_type\` でCSV形式を確認  
-3. \`csv.preview\` でスキーマ初期化
-4. 必要に応じて \`csv.apply_schema_patch\` で調整
-5. \`csv.generate_runner\` でPythonスクリプト生成
-6. \`csv.run_runner\` で分析実行
+1. Verify file path with \`locate_file\`
+2. Confirm CSV format with \`detect_file_type\`  
+3. Initialize schema with \`csv.preview\`
+4. Adjust with \`csv.apply_schema_patch\` if needed
+5. Generate Python script with \`csv.generate_runner\`
+6. Execute analysis with \`csv.run_runner\`
 
-全てのツールは統一ログ形式 \`[TOOL] name: status (duration)ms\` で記録されます。
+All tools are recorded in unified log format \`[TOOL] name: status (duration)ms\`.
 `;
 
 export function registerWorkflowCsvPrompt(server: Server): void {
