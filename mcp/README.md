@@ -1,62 +1,62 @@
 # toorPIA MCP Server
 
-toorPIA APIをMCPツールとして提供するサーバー実装。
+MCP (Model Context Protocol) server implementation providing comprehensive tools for toorPIA API integration.
 
-## 新しい構成
+## Architecture
 
-単一ファイル実装から以下の構造に分割：
+Modular server implementation with separated concerns, evolved from monolithic single-file to structured architecture:
 
 ```
 src/
-├─ server.ts                 # エントリポイント（MCPサーバ起動）
+├─ server.ts                 # Main entry point (MCP server startup)
 ├─ tools/
-│  ├─ common.ts             # 共通ツール（locate_file, detect_file_type, etc.）
-│  ├─ csv.ts                # CSVワークフロー（fit_transform, addplot）
-│  └─ wav.ts                # WAVワークフロー（ENABLE_WAV制御）
+│  ├─ common.ts             # Common tools (locate_file, detect_file_type, etc.)
+│  ├─ csv.ts                # CSV workflow (fit_transform, addplot, csv.*)
+│  └─ wav.ts                # WAV workflow (ENABLE_WAV controlled)
 ├─ prompts/
-│  ├─ workflow_csv.ts       # CSVワークフロー案内
-│  └─ workflow_wav.ts       # WAVワークフロー案内
+│  ├─ workflow_csv.ts       # CSV workflow guidance
+│  └─ workflow_wav.ts       # WAV workflow guidance
 ├─ client/
-│  └─ toorpia.ts            # toorPIA APIクライアント
-└─ types.ts                 # 共通型定義
+│  └─ toorpia.ts            # toorPIA API client
+└─ types.ts                 # Shared type definitions
 ```
 
-## 起動方法
+## Quick Start
 
-### 開発モード
+### Development Mode
 ```bash
 npm run dev
 ```
 
-### プロダクションビルド
+### Production Build
 ```bash
 npm run build
 npm start
 ```
 
-## 環境変数
+## Environment Configuration
 
-`.env.example`を`.env`にコピーして設定：
+Copy `.env.example` to `.env` and configure:
 
 ```bash
-# toorPIA API設定
+# toorPIA API Configuration
 TOORPIA_API_KEY=your_api_key_here
 TOORPIA_API_URL=http://localhost:3000
 
-# 機能制御
+# Feature Control
 ENABLE_WAV=true
 ```
 
-### 重要: TOORPIA_API_KEY 設定
+### Important: TOORPIA_API_KEY Setup
 
-**CSVワークフローでPythonスクリプト実行時に必要:**
+**Required for CSV workflow Python script execution:**
 
-1. **環境変数として設定**（推奨）：
+1. **Set as environment variable** (recommended):
    ```bash
    export TOORPIA_API_KEY="your_actual_api_key_here"
    ```
 
-2. **MCPサーバー起動時に指定**：
+2. **Specify at MCP server startup**:
    ```json
    {
      "env": {
@@ -65,67 +65,69 @@ ENABLE_WAV=true
    }
    ```
 
-3. **Python環境での前提条件**：
-   - `python3` コマンドが利用可能
-   - `pip install toorpia` でパッケージインストール済み
-   - `TOORPIA_API_KEY` 環境変数が設定済み
+3. **Python environment prerequisites**:
+   - `python3` command available
+   - `pip install toorpia` package installed
+   - `TOORPIA_API_KEY` environment variable configured
 
-### ENABLE_WAV による制御
+### ENABLE_WAV Control
 
-- `ENABLE_WAV=true` (デフォルト): WAV機能有効
-- `ENABLE_WAV=false`: WAV機能無効（NOT_IMPLEMENTED応答）
+- `ENABLE_WAV=true` (default): WAV functionality enabled
+- `ENABLE_WAV=false`: WAV functionality disabled (NOT_IMPLEMENTED response)
 
-## 新規ツール
+## Available Tools
 
-### locate_file
-ファイル存在確認と絶対パス取得
+### New Common Tools
+
+#### locate_file
+File existence verification and absolute path resolution
 
 ```json
-// 入力
+// Input
 {
   "baseDir": "/path/to/base", // optional
   "path": "relative/file.csv"
 }
 
-// 出力（成功）
+// Output (Success)
 {
   "ok": true,
   "absPath": "/path/to/base/relative/file.csv",
   "exists": true
 }
 
-// 出力（エラー）
+// Output (Error)
 {
   "ok": false,
   "code": "LOCATE_ERROR",
-  "reason": "エラー詳細"
+  "reason": "Error details"
 }
 ```
 
-### detect_file_type
-ファイル形式判定（CSV/WAV/unknown）
+#### detect_file_type
+File format detection (CSV/WAV/unknown)
 
 ```json
-// 入力
+// Input
 {
   "path": "/path/to/file.wav"
 }
 
-// 出力（WAV）
+// Output (WAV)
 {
   "ok": true,
   "kind": "wav",
   "reason": "Detected WAV by RIFF header"
 }
 
-// 出力（CSV）
+// Output (CSV)
 {
   "ok": true,
   "kind": "csv", 
   "reason": "Detected CSV by extension"
 }
 
-// 出力（不明）
+// Output (Unknown)
 {
   "ok": true,
   "kind": "unknown",
@@ -133,43 +135,43 @@ ENABLE_WAV=true
 }
 ```
 
-## 既存ツール（API互換性保持）
+### Legacy Tools (Full API Compatibility Maintained)
 
-以下の10ツールは完全に互換性を保持：
+The following 10 tools maintain complete compatibility:
 
-- `fit_transform`: CSVデータからベースマップ作成
-- `addplot`: 既存マップにデータ追加
-- `fit_transform_waveform`: WAVファイルからベースマップ作成
-- `addplot_waveform`: WAVファイルをマップに追加
-- `list_map`: マップ一覧
-- `list_addplots`: Addplot一覧  
-- `get_addplot`: Addplot詳細取得
-- `get_addplot_features`: 特徴量取得
-- `export_map`: マップエクスポート
-- `import_map`: マップインポート
-- `whoami`: 認証確認
+- `fit_transform`: Create base map from CSV/DataFrame data
+- `addplot`: Add data to existing maps
+- `fit_transform_waveform`: Create base map from WAV files
+- `addplot_waveform`: Add WAV files to maps
+- `list_map`: List all maps
+- `list_addplots`: List addplots for a map
+- `get_addplot`: Get addplot details
+- `get_addplot_features`: Get feature data
+- `export_map`: Export map data
+- `import_map`: Import map data
+- `whoami`: Authentication verification
 
-## エラーレスポンス統一
+## Unified Error Response
 
-全ツールで統一されたエラー形式：
+All tools use unified error format:
 
 ```json
 {
   "ok": false,
   "code": "ERROR_CODE",
-  "reason": "詳細なエラー説明"
+  "reason": "Detailed error description"
 }
 ```
 
-## ログ出力
+## Logging Output
 
-各ツール呼び出しでログ出力：
+Each tool call generates log output:
 ```
 [TOOL] tool_name: OK (123ms)
 [TOOL] tool_name: ERROR:AUTH_FAILED (45ms)
 ```
 
-## MCP クライアント設定例
+## MCP Client Configuration Examples
 
 ### Claude Desktop
 `mcp_settings.json`:
@@ -195,21 +197,21 @@ ENABLE_WAV=true
 node ./dist/server.js
 ```
 
-## CSVワークフロー
+## CSV Workflow
 
-完全なインタラクティブCSVデータ処理パイプライン：
+Complete interactive CSV data processing pipeline:
 
 ### csv.preview
-CSVファイルの自動型推論とスキーマ初期化
+CSV file automatic type inference and schema initialization
 
 ```json
-// 入力
+// Input
 {
   "path": "/absolute/path/to/file.csv",
   "nRows": 5  // optional, default: 5
 }
 
-// 出力
+// Output
 {
   "ok": true,
   "filePath": "/absolute/path/to/file.csv",
@@ -236,10 +238,10 @@ CSVファイルの自動型推論とスキーマ初期化
 ```
 
 ### csv.apply_schema_patch
-カラムスキーマの調整（型・重み・使用フラグ）
+Column schema adjustment (type, weight, usage flags)
 
 ```json
-// 入力
+// Input
 {
   "path": "/absolute/path/to/file.csv",
   "patches": [
@@ -255,7 +257,7 @@ CSVファイルの自動型推論とスキーマ初期化
   ]
 }
 
-// 出力  
+// Output  
 {
   "ok": true,
   "updatedColumns": ["sensor_id"]
@@ -263,15 +265,15 @@ CSVファイルの自動型推論とスキーマ初期化
 ```
 
 ### csv.get_schema
-現在のスキーマ状態確認
+Current schema state verification
 
 ```json
-// 入力
+// Input
 {
   "path": "/absolute/path/to/file.csv"
 }
 
-// 出力
+// Output
 {
   "ok": true,
   "schema": {
@@ -285,16 +287,16 @@ CSVファイルの自動型推論とスキーマ初期化
 ```
 
 ### csv.generate_runner
-toorPIA準拠Pythonスクリプト生成
+toorPIA-compliant Python script generation
 
 ```json
-// 入力
+// Input
 {
   "path": "/absolute/path/to/file.csv",
   "outputPath": "/path/to/script.py"  // optional
 }
 
-// 出力
+// Output
 {
   "ok": true,
   "script": "#!/usr/bin/env python3\n# Auto-generated script...",
@@ -303,15 +305,15 @@ toorPIA準拠Pythonスクリプト生成
 ```
 
 ### csv.run_runner
-Pythonスクリプト同期実行
+Synchronous Python script execution
 
 ```json
-// 入力
+// Input
 {
   "scriptContent": "import pandas as pd\nfrom toorpia import toorPIA\n..."
 }
 
-// 出力（成功）
+// Output (Success)
 {
   "ok": true,
   "stdout": "Loading CSV data...\nAnalysis complete!",
@@ -319,7 +321,7 @@ Pythonスクリプト同期実行
   "exitCode": 0
 }
 
-// 出力（エラー）
+// Output (Error)
 {
   "ok": false,
   "code": "RUNTIME_ERROR",
@@ -327,70 +329,70 @@ Pythonスクリプト同期実行
 }
 ```
 
-### 完全ワークフロー例
+### Complete Workflow Example
 
-testdata/sensor_log.csv を使用：
+Using testdata/sensor_log.csv:
 
 ```bash
-# 1. ファイル確認
-locate_file -> 絶対パス取得
-detect_file_type -> CSV確認
+# 1. File verification
+locate_file -> get absolute path
+detect_file_type -> confirm CSV format
 
-# 2. スキーマ初期化  
-csv.preview -> 自動型推論、サンプルデータ表示
+# 2. Schema initialization  
+csv.preview -> automatic type inference, display sample data
 
-# 3. スキーマ調整（任意）
-csv.apply_schema_patch -> 不要カラム除外、重み調整
+# 3. Schema adjustment (optional)
+csv.apply_schema_patch -> exclude unnecessary columns, adjust weights
 
-# 4. Pythonスクリプト生成
-csv.generate_runner -> DROP_COLUMNS自動設定、toorPIA呼び出し
+# 4. Python script generation
+csv.generate_runner -> auto-configure DROP_COLUMNS, toorPIA invocation
 
-# 5. 実行
-csv.run_runner -> 分析実行、結果取得
+# 5. Execution
+csv.run_runner -> execute analysis, retrieve results
 ```
 
-### エラーコード
+### Error Codes
 
-CSVワークフロー専用エラー：
-- `NOT_FOUND`: ファイルまたはデータが見つからない
-- `SCHEMA_NOT_INITIALIZED`: スキーマが未初期化（csv.preview必須）
-- `SCHEMA_NOT_READY`: スキーマが準備未完了
-- `UNKNOWN_COLUMN`: 指定カラムが存在しない
-- `RUNTIME_ERROR`: 実行時エラー
-- `PYTHON_NOT_FOUND`: python3コマンド未発見
+CSV workflow-specific errors:
+- `NOT_FOUND`: File or data not found
+- `SCHEMA_NOT_INITIALIZED`: Schema not initialized (csv.preview required)
+- `SCHEMA_NOT_READY`: Schema preparation incomplete
+- `UNKNOWN_COLUMN`: Specified column does not exist
+- `RUNTIME_ERROR`: Runtime error
+- `PYTHON_NOT_FOUND`: python3 command not found
 
-## 実装状況
+## Implementation Status
 
-### ✅ 完了
-- **ファイル分割リファクタリング**: 単一ファイルから構造化アーキテクチャ
-- **API互換性保持**: 既存10ツール完全互換
-- **新規ツール**: locate_file, detect_file_type
-- **CSVワークフロー**: プレビュー→調整→生成→実行の完全パイプライン
-  - csv.preview: 自動型推論とスキーマ初期化
-  - csv.apply_schema_patch: インタラクティブスキーマ調整
-  - csv.get_schema: スキーマ状態確認
-  - csv.generate_runner: toorPIA準拠スクリプト生成
-  - csv.run_runner: Python同期実行
-- **統一エラーレスポンス**: {ok, code, reason}形式
-- **ログ機能**: [TOOL] name: status (duration)ms
-- **ENABLE_WAV制御**: 環境変数による機能制御
-- **プロンプト登録**: 完全ワークフロー案内
+### ✅ Completed
+- **File Split Refactoring**: From monolithic to structured architecture
+- **API Compatibility**: Complete compatibility for existing 10 tools
+- **New Tools**: locate_file, detect_file_type
+- **CSV Workflow**: Complete pipeline: preview→adjustment→generation→execution
+  - csv.preview: Automatic type inference and schema initialization
+  - csv.apply_schema_patch: Interactive schema adjustment
+  - csv.get_schema: Schema state verification
+  - csv.generate_runner: toorPIA-compliant script generation
+  - csv.run_runner: Python synchronous execution
+- **Unified Error Response**: {ok, code, reason} format
+- **Logging Functionality**: [TOOL] name: status (duration)ms
+- **ENABLE_WAV Control**: Environment variable feature control
+- **Prompt Registration**: Complete workflow guidance
 
-### 🚧 未実装（今後のPR）
-- WAV機能の詳細実装
-- プロンプトの実際の登録（MCP SDK対応時）
-- 追加データ処理パイプライン
+### 🚧 Future Implementation (Upcoming PRs)
+- Detailed WAV functionality implementation
+- Actual prompt registration (when MCP SDK supports it)
+- Additional data processing pipelines
 
-## 開発者向け
+## Developer Guide
 
-### ツール追加
-1. `src/tools/[category].ts`にツール実装
-2. `src/server.ts`でインポート・登録
+### Adding Tools
+1. Implement in `src/tools/[category].ts`
+2. Import and register in `src/server.ts`
 
-### エラーハンドリング
-- 統一された`{ok, code, reason}`形式を使用
-- ログ関数`logTool(name, result, duration)`を呼び出し
+### Error Handling
+- Use unified `{ok, code, reason}` format
+- Call log function `logTool(name, result, duration)`
 
-### 環境変数
-- 機能制御は環境変数で実装
-- `.env.example`に新しい変数を追加
+### Environment Variables
+- Implement feature control via environment variables
+- Add new variables to `.env.example`
