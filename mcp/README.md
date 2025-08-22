@@ -1,217 +1,208 @@
 # toorPIA MCP Server
 
-This is a Model Context Protocol (MCP) server that provides access to toorPIA API endpoints as MCP tools. It enables seamless integration of toorPIA's data analysis capabilities into applications supporting MCP, such as Claude Desktop.
+toorPIA APIをMCPツールとして提供するサーバー実装。
 
-## Features Overview
+## 新しい構成
 
-The toorPIA MCP server exposes toorPIA API functionality as MCP tools, providing the following operations:
+単一ファイル実装から以下の構造に分割：
 
-### Data Analysis Functions
-- **fit_transform**: Create base map from DataFrame data
-- **addplot**: Add data to existing map (including anomaly detection)
-- **fit_transform_waveform**: Create base map from WAV/CSV files
-- **addplot_waveform**: Add WAV/CSV files to existing map
-
-### Map Management Functions
-- **list_map**: List available maps
-- **export_map**: Export map (save locally)
-- **import_map**: Import map (load from local)
-
-### Additional Plot Functions
-- **list_addplots**: List additional plots for a map
-- **get_addplot**: Get details of specific additional plot
-- **get_addplot_features**: Feature analysis of additional plots
-
-### Authentication & Health Functions
-- **whoami**: Check authentication status
-
-## Setup
-
-### 1. Install Dependencies
-
-```bash
-cd mcp
-npm install
+```
+src/
+├─ server.ts                 # エントリポイント（MCPサーバ起動）
+├─ tools/
+│  ├─ common.ts             # 共通ツール（locate_file, detect_file_type, etc.）
+│  ├─ csv.ts                # CSVワークフロー（fit_transform, addplot）
+│  └─ wav.ts                # WAVワークフロー（ENABLE_WAV制御）
+├─ prompts/
+│  ├─ workflow_csv.ts       # CSVワークフロー案内
+│  └─ workflow_wav.ts       # WAVワークフロー案内
+├─ client/
+│  └─ toorpia.ts            # toorPIA APIクライアント
+└─ types.ts                 # 共通型定義
 ```
 
-### 2. Build TypeScript
+## 起動方法
 
+### 開発モード
+```bash
+npm run dev
+```
+
+### プロダクションビルド
 ```bash
 npm run build
+npm start
 ```
 
-### 3. Environment Variables
+## 環境変数
 
-Set the following environment variables:
+`.env.example`を`.env`にコピーして設定：
 
 ```bash
-export TOORPIA_API_KEY="your-api-key-here"
-export TOORPIA_API_URL="http://localhost:3000"  # Optional (default: http://localhost:3000)
+# toorPIA API設定
+TOORPIA_API_KEY=your_api_key_here
+TOORPIA_API_URL=http://localhost:3000
+
+# 機能制御
+ENABLE_WAV=true
 ```
 
-### 4. Claude Desktop Integration
+### ENABLE_WAV による制御
 
-Add the following to your Claude Desktop configuration file (typically `~/Library/Application Support/Claude/claude_desktop_config.json`):
+- `ENABLE_WAV=true` (デフォルト): WAV機能有効
+- `ENABLE_WAV=false`: WAV機能無効（NOT_IMPLEMENTED応答）
+
+## 新規ツール
+
+### locate_file
+ファイル存在確認と絶対パス取得
+
+```json
+// 入力
+{
+  "baseDir": "/path/to/base", // optional
+  "path": "relative/file.csv"
+}
+
+// 出力（成功）
+{
+  "ok": true,
+  "absPath": "/path/to/base/relative/file.csv",
+  "exists": true
+}
+
+// 出力（エラー）
+{
+  "ok": false,
+  "code": "LOCATE_ERROR",
+  "reason": "エラー詳細"
+}
+```
+
+### detect_file_type
+ファイル形式判定（CSV/WAV/unknown）
+
+```json
+// 入力
+{
+  "path": "/path/to/file.wav"
+}
+
+// 出力（WAV）
+{
+  "ok": true,
+  "kind": "wav",
+  "reason": "Detected WAV by RIFF header"
+}
+
+// 出力（CSV）
+{
+  "ok": true,
+  "kind": "csv", 
+  "reason": "Detected CSV by extension"
+}
+
+// 出力（不明）
+{
+  "ok": true,
+  "kind": "unknown",
+  "reason": "Unknown file type with extension: .txt"
+}
+```
+
+## 既存ツール（API互換性保持）
+
+以下の10ツールは完全に互換性を保持：
+
+- `fit_transform`: CSVデータからベースマップ作成
+- `addplot`: 既存マップにデータ追加
+- `fit_transform_waveform`: WAVファイルからベースマップ作成
+- `addplot_waveform`: WAVファイルをマップに追加
+- `list_map`: マップ一覧
+- `list_addplots`: Addplot一覧  
+- `get_addplot`: Addplot詳細取得
+- `get_addplot_features`: 特徴量取得
+- `export_map`: マップエクスポート
+- `import_map`: マップインポート
+- `whoami`: 認証確認
+
+## エラーレスポンス統一
+
+全ツールで統一されたエラー形式：
 
 ```json
 {
+  "ok": false,
+  "code": "ERROR_CODE",
+  "reason": "詳細なエラー説明"
+}
+```
+
+## ログ出力
+
+各ツール呼び出しでログ出力：
+```
+[TOOL] tool_name: OK (123ms)
+[TOOL] tool_name: ERROR:AUTH_FAILED (45ms)
+```
+
+## MCP クライアント設定例
+
+### Claude Desktop
+`mcp_settings.json`:
+```json
+{
   "mcpServers": {
-    "toorpia": {
+    "toorpia-mcp": {
       "command": "node",
-      "args": ["./dist/index.js"],
-      "cwd": "/path/to/your/toorpia/mcp",
+      "args": ["./dist/server.js"],
+      "cwd": "/path/to/toorpia-mcp",
       "env": {
-        "TOORPIA_API_KEY": "your-actual-api-key",
-        "TOORPIA_API_URL": "http://localhost:3000"
+        "TOORPIA_API_KEY": "your_key_here",
+        "TOORPIA_API_URL": "http://localhost:3000",
+        "ENABLE_WAV": "true"
       }
     }
   }
 }
 ```
 
-**Important**: 
-- Replace `/path/to/your/toorpia/mcp` with the actual path
-- Replace `your-actual-api-key` with your actual API key
-
-## Available Tools
-
-### Data Processing Tools
-
-#### fit_transform
-Creates a base map from DataFrame data (pandas orient='split' format).
-
-**Parameters:**
-- `data`: DataFrame (orient='split' format)
-- `label`, `tag`, `description`: Metadata (optional)
-- `weight_option_str`, `type_option_str`: Column weight and type settings (optional)
-- `identna_resolution`, `identna_effective_radius`: identna parameters (optional)
-
-#### addplot
-Adds DataFrame data to an existing map and performs anomaly detection.
-
-**Parameters:**
-- `data`: DataFrame (orient='split' format)
-- `mapNo`: Target map number (optional, uses last fit_transform map if omitted)
-- `detabn_*`: Anomaly detection parameters (optional)
-- `mode`: 'xy' (coordinates only) or 'full' (complete information, default)
-
-#### fit_transform_waveform
-Creates a base map from WAV or CSV files.
-
-**Parameters:**
-- `files`: Array of file paths
-- `mkfftseg_*`: FFT segmentation parameters (optional)
-- `identna_*`: identna parameters (optional)
-- `label`, `tag`, `description`: Metadata (optional)
-
-#### addplot_waveform
-Adds WAV or CSV files to an existing map and performs anomaly detection.
-
-**Parameters:**
-- `files`: Array of file paths
-- `mapNo`: Target map number (optional)
-- `mkfftseg_*`: FFT segmentation parameters (optional)
-- `detabn_*`: Anomaly detection parameters (optional)
-
-### Map Management Tools
-
-#### list_map
-Retrieves a list of available maps.
-
-#### export_map
-Exports a specified map to a local directory.
-
-**Parameters:**
-- `mapNo`: Map number to export
-- `exportDir`: Export destination directory path
-
-#### import_map
-Imports a map from a local directory.
-
-**Parameters:**
-- `inputDir`: Import source directory path
-
-### Additional Plot Management Tools
-
-#### list_addplots
-Retrieves a list of additional plots for a specified map.
-
-**Parameters:**
-- `mapNo`: Target map number
-
-#### get_addplot
-Retrieves detailed information about a specific additional plot.
-
-**Parameters:**
-- `mapNo`: Target map number
-- `addplotNo`: Additional plot number
-
-#### get_addplot_features
-Retrieves feature analysis results for an additional plot.
-
-**Parameters:**
-- `mapNo`: Target map number
-- `addplotNo`: Additional plot number
-- `use_tscore`: Whether to use T-score (default: false, uses Z-score)
-
-## Development & Debugging
-
-### Development Mode
+### MCP Inspector
 ```bash
-npm run dev
+node ./dist/server.js
 ```
 
-### Build
-```bash
-npm run build
-```
+## 実装状況
 
-### Production Run
-```bash
-npm start
-```
+### ✅ 完了
+- ファイル分割リファクタリング
+- API互換性保持
+- 新規ツール（locate_file, detect_file_type）
+- 統一エラーレスポンス
+- ログ機能
+- ENABLE_WAV制御
+- プロンプト登録（案内テンプレート）
 
-## Correspondence with client.py
+### 🚧 未実装（今後のPR）
+- CSVワークフロー詳細機能：
+  - preview_schema: スキーマプレビュー
+  - apply_schema: スキーマ適用
+  - get_schema: スキーマ取得
+  - generate_runner: 実行プラン生成
+  - run_runner: 実行プラン実行
+- WAV機能の詳細実装
+- プロンプトの実際の登録（MCP SDK対応時）
 
-This MCP server provides nearly complete coverage of the toorPIA Python client.py functionality:
+## 開発者向け
 
-| Python client.py | MCP Tool | Description |
-|------------------|----------|-------------|
-| `fit_transform()` | `fit_transform` | Create base map from DataFrame |
-| `addplot()` | `addplot` | DataFrame additional plot |
-| `fit_transform_waveform()` | `fit_transform_waveform` | Create base map from waveform files |
-| `addplot_waveform()` | `addplot_waveform` | Waveform file additional plot |
-| `list_map()` | `list_map` | List maps |
-| `export_map()` / `download_map()` | `export_map` | Export map |
-| `import_map()` / `upload_map()` | `import_map` | Import map |
-| `list_addplots()` | `list_addplots` | List additional plots |
-| `get_addplot()` | `get_addplot` | Get additional plot details |
-| `get_addplot_features()` | `get_addplot_features` | Feature analysis |
-| `authenticate()` | Auto-executed | Authentication (automatically executed on each tool run) |
+### ツール追加
+1. `src/tools/[category].ts`にツール実装
+2. `src/server.ts`でインポート・登録
 
-## Important Notes
+### エラーハンドリング
+- 統一された`{ok, code, reason}`形式を使用
+- ログ関数`logTool(name, result, duration)`を呼び出し
 
-1. **File Paths**: When processing waveform files, specify file paths accessible from the MCP server
-2. **Authentication**: Authentication is performed automatically on each tool execution (no explicit authentication required)
-3. **Session Management**: Session keys are managed automatically
-4. **Error Handling**: API errors are properly reported as MCP tool errors
-
-## Troubleshooting
-
-### Authentication Errors
-- Verify that the `TOORPIA_API_KEY` environment variable is set correctly
-- Confirm that the API key is valid
-- Check authentication status with the `whoami` tool
-
-### Connection Errors
-- Verify that `TOORPIA_API_URL` is correct
-- Confirm that the toorPIA API server is running
-- Check network connectivity
-
-### File Access Errors
-- Verify that the specified file path exists
-- Confirm that the MCP server has read permissions for the file
-
-## License
-
-This MCP server is provided as part of the toorPIA API client library.
+### 環境変数
+- 機能制御は環境変数で実装
+- `.env.example`に新しい変数を追加
