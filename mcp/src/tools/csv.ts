@@ -8,7 +8,7 @@ import { spawn, spawnSync } from "child_process";
 import { join, dirname } from "path";
 import { toorpiaClient } from "../client/toorpia.js";
 import { SplitDF } from "./common.js";
-import { 
+import {
   ColType, 
   ColSpec, 
   Schema, 
@@ -34,12 +34,14 @@ function logTool(name: string, result: "OK" | string, durationMs: number): void 
 function inferColumnType(values: string[]): ColType {
   // Filter out empty/null values
   const nonEmptyValues = values.filter(v => v !== null && v !== undefined && v !== "");
-  if (nonEmptyValues.length === 0) return "string";
+  if (nonEmptyValues.length === 0) return "none";
   
-  // Boolean pattern: true/false/1/0/yes/no (case insensitive)
-  const booleanPattern = /^(true|false|1|0|yes|no)$/i;
-  if (nonEmptyValues.every(v => booleanPattern.test(v.toString()))) {
-    return "boolean";
+  // Number patterns
+  const numericValues = nonEmptyValues.filter(v => !isNaN(Number(v)));
+  if (numericValues.length === nonEmptyValues.length) {
+    // Check if all are integers
+    const allIntegers = numericValues.every(v => Number.isInteger(Number(v)));
+    return allIntegers ? "int" : "float";
   }
   
   // DateTime pattern: try Date.parse
@@ -50,35 +52,25 @@ function inferColumnType(values: string[]): ColType {
       /[-\/:\s]/.test(v.toString()) || v.toString().length > 10
     );
     if (hasDateLikePattern) {
-      return "datetime";
+      return "date";
     }
   }
   
-  // Number patterns
-  const numericValues = nonEmptyValues.filter(v => !isNaN(Number(v)));
-  if (numericValues.length === nonEmptyValues.length) {
-    // Check if all are integers
-    const allIntegers = numericValues.every(v => Number.isInteger(Number(v)));
-    return allIntegers ? "integer" : "number";
+  // Enum pattern: limited unique values (categorical data)
+  const uniqueValues = [...new Set(nonEmptyValues)];
+  if (uniqueValues.length <= 10 && uniqueValues.length < nonEmptyValues.length * 0.5) {
+    return "enum";
   }
   
-  return "string";
+  return "none";
 }
 
-function getDefaultWeight(type: ColType): number {
-  switch (type) {
-    case "integer":
-    case "number":
-      return 1.0;
-    case "datetime":
-      return 0.8;
-    case "boolean":
-      return 0.6;
-    case "string":
-      return 0.5;
-    default:
-      return 0.5;
+function getDefaultWeight(type: ColType, use: boolean): number {
+  // float, int, enum かつ use: true の場合のみ重み1.0
+  if (use && (type === "float" || type === "int" || type === "enum")) {
+    return 1.0;
   }
+  return 0.0;
 }
 
 // Fit transform tool for CSV/DataFrame data
@@ -160,12 +152,13 @@ async function csvPreview(args: any): Promise<CallToolResult> {
     const columns: ColSpec[] = columnNames.map(name => {
       const columnValues = records.map(record => record[name]).filter(v => v !== null && v !== undefined);
       const inferredType = inferColumnType(columnValues);
+      const defaultUse = true;
       
       return {
         name,
         type: inferredType,
-        weight: getDefaultWeight(inferredType),
-        use: true
+        weight: getDefaultWeight(inferredType, defaultUse),
+        use: defaultUse
       };
     });
 
@@ -424,7 +417,7 @@ const csvToolDefinitions = [
       weight_option_str: z.string().optional(),
       type_option_str: z.string().optional(),
       identna_resolution: z.number().optional(),
-      identna_effective_radius: z.number().optional(),
+      identna_effective_radius: z.number().optional()
     }),
     handler: fitTransform
   },
@@ -440,7 +433,7 @@ const csvToolDefinitions = [
       detabn_rate_threshold: z.number().optional(),
       detabn_threshold: z.number().optional(),
       detabn_print_score: z.boolean().optional(),
-      mode: z.enum(["xy", "full"]).optional(),
+      mode: z.enum(["xy", "full"]).optional()
     }),
     handler: addplot
   },
@@ -462,7 +455,7 @@ const csvToolDefinitions = [
       patches: z.array(z.object({
         columnName: z.string(),
         updates: z.object({
-          type: z.enum(["integer", "number", "boolean", "datetime", "string"]).optional(),
+          type: z.enum(["float", "int", "enum", "date", "none"]).optional(),
           weight: z.number().optional(),
           use: z.boolean().optional(),
           description: z.string().optional()

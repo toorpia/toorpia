@@ -94,7 +94,7 @@ const wavToolDefinitions = [
       identna_effective_radius: z.number().optional(),
       label: z.string().optional(),
       tag: z.string().optional(),
-      description: z.string().optional(),
+      description: z.string().optional()
     }),
     handler: fitTransformWaveform
   },
@@ -115,7 +115,7 @@ const wavToolDefinitions = [
       detabn_max_window: z.number().optional(),
       detabn_rate_threshold: z.number().optional(),
       detabn_threshold: z.number().optional(),
-      detabn_print_score: z.boolean().optional(),
+      detabn_print_score: z.boolean().optional()
     }),
     handler: addplotWaveform
   }

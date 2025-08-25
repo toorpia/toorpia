@@ -279,19 +279,28 @@ const commonToolDefinitions = [
   {
     name: "list_addplots",
     description: "List addplots for a map",
-    inputSchema: z.object({ mapNo: z.number() }),
+    inputSchema: z.object({ 
+      mapNo: z.number()
+    }),
     handler: listAddplots
   },
   {
     name: "get_addplot",
     description: "Get a specific addplot (returns metadata + xyData)",
-    inputSchema: z.object({ mapNo: z.number(), addplotNo: z.number() }),
+    inputSchema: z.object({ 
+      mapNo: z.number(), 
+      addplotNo: z.number()
+    }),
     handler: getAddplot
   },
   {
     name: "get_addplot_features",
     description: "Get features for an addplot (zscore by default; set use_tscore=true for t-score)",
-    inputSchema: z.object({ mapNo: z.number(), addplotNo: z.number(), use_tscore: z.boolean().optional() }),
+    inputSchema: z.object({ 
+      mapNo: z.number(), 
+      addplotNo: z.number(), 
+      use_tscore: z.boolean().optional()
+    }),
     handler: getAddplotFeatures
   },
   {
@@ -299,7 +308,7 @@ const commonToolDefinitions = [
     description: "Export a map to a directory. Returns map data and export path.",
     inputSchema: z.object({
       mapNo: z.number(),
-      exportDir: z.string(),
+      exportDir: z.string()
     }),
     handler: exportMap
   },
@@ -307,7 +316,7 @@ const commonToolDefinitions = [
     name: "import_map",
     description: "Import a map from a directory. Returns new mapNo.",
     inputSchema: z.object({
-      inputDir: z.string(),
+      inputDir: z.string()
     }),
     handler: importMap
   }

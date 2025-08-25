@@ -1,12 +1,12 @@
 // Common type definitions for toorPIA MCP server
 
 // CSV Workflow specific types
-export type ColType = "integer" | "number" | "boolean" | "datetime" | "string";
+export type ColType = "float" | "int" | "enum" | "date" | "none";
 
 export interface ColSpec {
   name: string;
   type: ColType;
-  weight: number;  // Default: num/int=1.0, datetime=0.8, boolean=0.6, string=0.5
+  weight: number;  // float/int/enum + use=true: 1.0, others: 0.0
   use: boolean;    // Default: true
   description?: string;
 }

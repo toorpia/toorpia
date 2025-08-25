@@ -10,8 +10,10 @@ export class ToorPIAClient {
   public mapNo: number | null = null;
   public shareUrl: string | null = null;
   public currentAddPlotNo: number | null = null;
+  private apiUrl: string = API_URL;
+  private apiKey: string = API_KEY;
 
-  constructor(private apiUrl: string = API_URL, private apiKey: string = API_KEY) {}
+  constructor() {}
 
   private async ensureAuth(): Promise<void> {
     if (this.sessionKey) return;
