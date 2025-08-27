@@ -3,9 +3,10 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { parse } from "csv-parse/sync";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { spawn, spawnSync } from "child_process";
 import { join, dirname } from "path";
+import { createHash } from "crypto";
 import { toorpiaClient } from "../client/toorpia.js";
 import { SplitDF } from "./common.js";
 import {
@@ -21,8 +22,42 @@ import {
   ExecutionResponse
 } from "../types.js";
 
-// Global schema storage - keyed by absolute path
-const schemaStore = new Map<string, Schema>();
+// Schema persistence directory
+const SCHEMA_DIR = join(process.cwd(), '.mcp-schemas');
+
+// Ensure schema directory exists
+function ensureSchemaDir(): void {
+  if (!existsSync(SCHEMA_DIR)) {
+    mkdirSync(SCHEMA_DIR, { recursive: true });
+  }
+}
+
+// Generate schema file path from CSV file path
+function getSchemaFilePath(csvPath: string): string {
+  const hash = createHash('md5').update(csvPath).digest('hex');
+  return join(SCHEMA_DIR, `${hash}.json`);
+}
+
+// Save schema to file
+function saveSchema(csvPath: string, schema: Schema): void {
+  ensureSchemaDir();
+  const schemaFilePath = getSchemaFilePath(csvPath);
+  writeFileSync(schemaFilePath, JSON.stringify(schema, null, 2), 'utf-8');
+}
+
+// Load schema from file
+function loadSchema(csvPath: string): Schema | null {
+  const schemaFilePath = getSchemaFilePath(csvPath);
+  if (!existsSync(schemaFilePath)) {
+    return null;
+  }
+  try {
+    const content = readFileSync(schemaFilePath, 'utf-8');
+    return JSON.parse(content) as Schema;
+  } catch (error) {
+    return null;
+  }
+}
 
 // Logging function
 function logTool(name: string, result: "OK" | string, durationMs: number): void {
@@ -170,8 +205,8 @@ async function csvPreview(args: any): Promise<CallToolResult> {
       description: `CSV file with ${records.length} rows and ${columnNames.length} columns`
     };
 
-    // Store schema in global storage
-    schemaStore.set(path, schema);
+    // Store schema to file
+    saveSchema(path, schema);
 
     const result: PreviewResponse = {
       ok: true,
@@ -181,8 +216,33 @@ async function csvPreview(args: any): Promise<CallToolResult> {
       sampleData: schema.sampleData
     };
 
+    // Format user-friendly display
+    const formattedColumns = columns.map(col => 
+      `- **${col.name}**: ${col.type} (weight: ${col.weight}, use: ${col.use})`
+    ).join('\n');
+    
+    const formattedSampleData = schema.sampleData.map((row, index) => 
+      `Row ${index + 1}: [${row.map(val => JSON.stringify(val)).join(', ')}]`
+    ).join('\n');
+
+    const userFriendlyText = `## CSV Schema Analysis
+
+**File:** ${result.filePath}
+**Total Rows:** ${result.rowCount}
+**Columns:** ${columns.length}
+
+### Column Types:
+${formattedColumns}
+
+### Sample Data (${nRows} rows):
+${formattedSampleData}
+
+---
+**Raw JSON Response:**
+${JSON.stringify(result)}`;
+
     logTool("csv.preview", "OK", Date.now() - startTime);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    return { content: [{ type: "text", text: userFriendlyText }] };
   } catch (error: any) {
     const result = { ok: false, code: ERROR_CODES.RUNTIME_ERROR, reason: error.message };
     logTool("csv.preview", ERROR_CODES.RUNTIME_ERROR, Date.now() - startTime);
@@ -196,9 +256,9 @@ async function csvApplySchemaPatch(args: any): Promise<CallToolResult> {
   try {
     const { path, patches } = args;
     
-    const schema = schemaStore.get(path);
+    const schema = loadSchema(path);
     if (!schema) {
-      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}` };
+      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}. Please run csv.preview first.` };
       logTool("csv.apply_schema_patch", ERROR_CODES.SCHEMA_NOT_INITIALIZED, Date.now() - startTime);
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     }
@@ -224,8 +284,8 @@ async function csvApplySchemaPatch(args: any): Promise<CallToolResult> {
       updatedColumns.push(columnName);
     }
 
-    // Update schema in storage
-    schemaStore.set(path, schema);
+    // Update schema in file
+    saveSchema(path, schema);
 
     const result: PatchResponse = {
       ok: true,
@@ -247,9 +307,9 @@ async function csvGetSchema(args: any): Promise<CallToolResult> {
   try {
     const { path } = args;
     
-    const schema = schemaStore.get(path);
+    const schema = loadSchema(path);
     if (!schema) {
-      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}` };
+      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}. Please run csv.preview first.` };
       logTool("csv.get_schema", ERROR_CODES.SCHEMA_NOT_INITIALIZED, Date.now() - startTime);
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     }
@@ -274,9 +334,9 @@ async function csvGenerateRunner(args: any): Promise<CallToolResult> {
   try {
     const { path, outputPath } = args;
     
-    const schema = schemaStore.get(path);
+    const schema = loadSchema(path);
     if (!schema) {
-      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}` };
+      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}. Please run csv.preview first.` };
       logTool("csv.generate_runner", ERROR_CODES.SCHEMA_NOT_INITIALIZED, Date.now() - startTime);
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     }
@@ -364,10 +424,12 @@ async function csvRunRunner(args: any): Promise<CallToolResult> {
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     }
 
-    // Execute Python script
+    // Execute Python script with output capture to prevent stdio conflicts
     const pythonProcess = spawnSync('python3', ['-c', scriptContent], {
       encoding: 'utf8',
-      timeout: 60000 // 60 second timeout
+      timeout: 10000, // Reduced to 10 second timeout for quick failures
+      stdio: ['ignore', 'pipe', 'pipe'], // Ignore stdin, capture stdout/stderr
+      windowsHide: true // Hide window on Windows
     });
 
     if (pythonProcess.error) {
