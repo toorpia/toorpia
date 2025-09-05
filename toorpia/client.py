@@ -715,6 +715,129 @@ class toorPIA:
             return None
 
     @pre_authentication
+    def addplot_csvform(self, files, mapNo=None, 
+                       # detabn parameters
+                       detabn_max_window=5, detabn_rate_threshold=1.0, 
+                       detabn_threshold=0, detabn_print_score=True):
+        """
+        Process CSV files for addplot (additional plot) analysis
+        Uses the same CSV processing options as the base map (stored in database)
+        
+        Args:
+            files (str or list): CSV file path or list of CSV file paths
+            mapNo (int, optional): Target map number. If None, uses current mapNo
+            detabn_max_window (int): Maximum window size for abnormality detection
+            detabn_rate_threshold (float): Rate threshold for abnormality detection
+            detabn_threshold (int): Threshold value for abnormality detection
+            detabn_print_score (bool): Whether to print abnormality score
+            
+        Returns:
+            dict: Dictionary containing:
+                - xyData: Coordinate data as NumPy array (each row is [x, y])
+                - addPlotNo: Additional plot number
+                - abnormalityStatus: 'normal', 'abnormal', or 'unknown'
+                - abnormalityScore: Abnormality score (float or None)
+                - shareUrl: Share URL for the map with this addplot
+        """
+        # Determine target map number
+        target_mapNo = mapNo if mapNo is not None else self.mapNo
+        if target_mapNo is None:
+            print("Error: Map number is not specified. Please provide mapNo or use fit_transform_csvform() first.")
+            return None
+        
+        # File existence and format check (accept both string and list, same as csvform)
+        if isinstance(files, str):
+            files = [files]  # Convert single file to list
+        
+        if not files or not isinstance(files, list):
+            print("Error: files must be a file path (string) or list of file paths")
+            return None
+        
+        files_to_upload = []
+        for file_path in files:
+            if not os.path.exists(file_path):
+                print(f"Error: File not found: {file_path}")
+                return None
+            
+            # File format check (.csv only)
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext != '.csv':
+                print(f"Error: Unsupported file format: {ext}. Only .csv files are supported.")
+                return None
+            
+            files_to_upload.append(('files', open(file_path, 'rb')))
+        
+        try:
+            # Prepare detabn parameters
+            detabn_params = {
+                'maxWindow': int(detabn_max_window),
+                'rateThreshold': float(detabn_rate_threshold),
+                'threshold': int(detabn_threshold),
+                'printScore': bool(detabn_print_score)
+            }
+            
+            # Send as form-data
+            form_data = {
+                'mapNo': str(target_mapNo),
+                'detabn_options': json.dumps(detabn_params)
+            }
+            
+            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
+            response = requests.post(
+                f"{API_URL}/data/addplot_csvform", 
+                files=files_to_upload,
+                data=form_data,
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                addXyData = response_data['resdata']
+                self.currentAddPlotNo = response_data.get('addPlotNo')  # Save addplot number
+                self.shareUrl = response_data.get('shareUrl')  # Save share URL
+                
+                # Convert coordinate data to NumPy array
+                np_array = np.array(addXyData)
+                
+                # Return extended result with coordinate data and abnormality information
+                result = {
+                    'xyData': np_array,
+                    'addPlotNo': self.currentAddPlotNo,
+                    'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
+                    'abnormalityScore': response_data.get('abnormalityScore'),    # Abnormality score
+                    'shareUrl': self.shareUrl
+                }
+                
+                return result
+            elif response.status_code == 400:
+                print("Error: Bad request. Invalid parameters or missing map.")
+                return None
+            elif response.status_code == 401:
+                print("Error: Unauthorized. Invalid session key or map number.")
+                return None
+            else:
+                try:
+                    error_message = response.json().get('message', 'Unknown error')
+                except:
+                    error_message = f"HTTP {response.status_code}: {response.text}"
+                print(f"CSV addplot failed. Server responded with error: {error_message}")
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error during file upload: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"Error processing CSV addplot: {str(e)}")
+            return None
+        finally:
+            # Ensure file handles are closed
+            for _, file_handle in files_to_upload:
+                try:
+                    file_handle.close()
+                except:
+                    pass
+
+    @pre_authentication
     def get_addplot(self, map_no, addplot_no):
         """
         特定の追加プロット情報を取得する

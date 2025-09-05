@@ -333,7 +333,92 @@ The `addplot_waveform` method returns a dictionary with the following keys:
 - CSV files: Requires `mkfftseg_sr` parameter
 - Mixed processing: Both file types in a single operation
 
-#### 4.2. Working with Add Plot History
+#### 4.2. Adding CSV Data to CSV-based Maps (CSV Addplot)
+
+For maps created with `fit_transform_csvform`, you can add CSV data using the `addplot_csvform` method. This method automatically uses the same CSV processing options (weight_option_str, type_option_str, drop_columns) that were used to create the base map, ensuring perfect consistency between the base map and additional plots.
+
+```python
+# Basic usage - add CSV file to a CSV-based map
+result = toorpia_client.addplot_csvform("new_data.csv")
+
+# Specify a target map number
+result = toorpia_client.addplot_csvform("sensor_data.csv", mapNo=123)
+
+# Process multiple CSV files
+csv_files = ["batch1.csv", "batch2.csv", "batch3.csv"]
+result = toorpia_client.addplot_csvform(csv_files)
+
+# With abnormality detection parameters
+result = toorpia_client.addplot_csvform(
+    "test_data.csv",
+    detabn_max_window=5,         # Maximum window size
+    detabn_rate_threshold=0.8,   # Abnormality rate threshold
+    detabn_threshold=0.1,        # Normal area threshold
+    detabn_print_score=True      # Include detailed scores
+)
+
+# Access comprehensive results
+print(f"Add Plot Number: {result['addPlotNo']}")
+print(f"Abnormality Status: {result['abnormalityStatus']}")  # 'normal', 'abnormal', 'unknown'
+print(f"Abnormality Score: {result['abnormalityScore']}")
+print(f"Coordinate Data Shape: {result['xyData'].shape}")
+print(f"Share URL: {result['shareUrl']}")
+```
+
+##### Key Features
+
+- **Automatic Option Consistency**: The method retrieves and applies the same CSV processing options (weight_option_str, type_option_str, drop_columns) that were used when creating the base map
+- **No Column Specification Needed**: Unlike general addplot methods, you don't need to specify weight or type options—they're automatically retrieved from the database
+- **Dimension Validation**: The system automatically validates that the uploaded CSV has the same effective number of columns as the base map
+- **Process Method Compatibility**: Only works with maps created using `fit_transform_csvform` (CSV-based maps)
+
+##### Practical Example
+
+```python
+# Step 1: Create a base map with specific CSV options
+base_result = toorpia_client.fit_transform_csvform(
+    "production_baseline.csv",
+    drop_columns=["ID", "Timestamp"],  # Exclude these columns
+    weight_option_str="3:1,4:1,5:0.5,6:1,7:1",  # Custom weights
+    identna_resolution=200,
+    label="Production Baseline"
+)
+
+# Step 2: Add new data using the same processing options automatically
+test_result = toorpia_client.addplot_csvform(
+    "daily_production.csv",  # Same structure as baseline
+    detabn_rate_threshold=0.7  # Sensitive abnormality detection
+)
+
+# The system automatically:
+# - Applies the same drop_columns=["ID", "Timestamp"]
+# - Uses the same weight_option_str="3:1,4:1,5:0.5,6:1,7:1"
+# - Validates column count consistency
+# - Performs abnormality detection against the baseline
+
+if test_result['abnormalityStatus'] == 'abnormal':
+    print("⚠️ Production anomaly detected!")
+    print(f"Abnormality score: {test_result['abnormalityScore']}")
+```
+
+##### Error Handling
+
+The method includes comprehensive error checking:
+
+- **Process Method Compatibility**: Throws an error if used with non-CSV-based maps
+- **Column Count Validation**: Verifies that the CSV has the correct number of effective columns
+- **File Format Validation**: Ensures only CSV files are uploaded
+
+##### Return Value
+
+Returns a dictionary with the same structure as other addplot methods:
+- **`xyData`**: NumPy array of 2D coordinates
+- **`addPlotNo`**: Sequential add plot number
+- **`abnormalityStatus`**: 'normal', 'abnormal', or 'unknown'
+- **`abnormalityScore`**: Numerical abnormality score
+- **`shareUrl`**: Updated share URL including this add plot
+
+#### 4.3. Working with Add Plot History
 
 toorPIA now supports maintaining a history of add plots for each map. This allows you to track multiple add plot operations and access their results at any time.
 
@@ -357,6 +442,67 @@ if add_plots:
         print(f"Records: {add_plot['nRecord']}")
         print(f"Status: {add_plot.get('status', 'Unknown')}")  # Display normal/abnormal determination result
 ```
+
+### Process Method Compatibility
+
+toorPIA enforces strict compatibility between base map creation methods and addplot methods to ensure data consistency and accurate analysis results.
+
+#### Supported Processing Methods
+
+1. **DataFrame Processing** (`fit_transform` + `addplot`)
+   - Base map: Created from pandas DataFrame or numpy arrays
+   - Addplot: Uses processed data (columns, data arrays)
+   - Use case: In-memory data processing with Python
+
+2. **CSV Direct Processing** (`fit_transform_csvform` + `addplot_csvform`)
+   - Base map: Created directly from CSV files
+   - Addplot: Uses CSV files with automatically applied processing options
+   - Use case: Large CSV files, consistent processing pipelines
+
+3. **Waveform Processing** (`fit_transform_waveform` + `addplot_waveform`)
+   - Base map: Created from WAV/CSV audio files
+   - Addplot: Uses WAV/CSV files with FFT-based feature extraction
+   - Use case: Audio analysis, vibration monitoring
+
+#### Compatibility Rules
+
+**✅ Compatible Combinations:**
+- DataFrame base map → `addplot()` method
+- CSV base map → `addplot_csvform()` method
+- Waveform base map → `addplot_waveform()` method
+
+**❌ Incompatible Combinations:**
+- DataFrame base map → `addplot_csvform()` or `addplot_waveform()`
+- CSV base map → `addplot()` or `addplot_waveform()`
+- Waveform base map → `addplot()` or `addplot_csvform()`
+
+#### Error Messages
+
+When attempting incompatible combinations, you'll receive clear error messages:
+
+```python
+# Example: Using wrong addplot method
+csv_base_map = toorpia_client.fit_transform_csvform("baseline.csv")
+
+# This will fail with a clear error
+try:
+    result = toorpia_client.addplot(data_array)  # Wrong method for CSV base map
+except Exception as e:
+    print(e)  # "Cannot use DataFrame addplot with csvform basemap. Please use the matching addplot method."
+```
+
+#### Technical Implementation
+
+The system tracks the processing method used for each base map and validates compatibility:
+
+- **processMethod field**: Automatically set during base map creation ('dataframe', 'csvform', 'waveform')
+- **Automatic validation**: Each addplot method checks compatibility before processing
+- **Clear guidance**: Error messages specify the correct method to use
+
+This strict separation ensures:
+- **Data Consistency**: Processing options remain consistent between base map and addplots
+- **Analysis Accuracy**: No mixing of different data processing paradigms
+- **User Guidance**: Clear error messages prevent confusion
 
 #### 5. Listing Available Maps
 
