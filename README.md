@@ -61,7 +61,71 @@ results = toorpia_client.fit_transform(
 - `identna_resolution`: Mesh resolution for normal area identification. Higher values provide finer granularity but require more computation.
 - `identna_effective_radius`: Effective radius as a ratio to the mesh area side length. Controls the influence radius around each data point.
 
-#### 2. Creating a Base Map from WAV (Sound) Data
+#### 2. Creating a Base Map from CSV Files (Direct Processing)
+
+```python
+# Basic single CSV file processing
+result = toorpia_client.fit_transform_csvform("sensor_data.csv")
+print(f"Map Number: {toorpia_client.mapNo}")
+print(f"Share URL: {toorpia_client.shareUrl}")
+
+# Multiple CSV files processing (automatically merged)
+csv_files = ["data1.csv", "data2.csv", "data3.csv"]
+result = toorpia_client.fit_transform_csvform(csv_files)
+
+# Using drop_columns to exclude specific columns
+result = toorpia_client.fit_transform_csvform(
+    "data.csv",
+    drop_columns=["ID", "Timestamp", "Comments"]  # These columns will be excluded
+)
+
+# Fine control with weight and type options
+result = toorpia_client.fit_transform_csvform(
+    "sensor_data.csv",
+    weight_option_str="1:0,2:0,3:1,4:1,5:1",  # Columns 1,2 have weight 0
+    type_option_str="1:none,2:none,3:float,4:float,5:int"
+)
+
+# Complete example with all parameters
+result = toorpia_client.fit_transform_csvform(
+    ["train_data.csv", "test_data.csv"],
+    drop_columns=["ID", "Name"],  # Takes precedence over weight/type options
+    weight_option_str="3:1,4:1,5:1",
+    type_option_str="3:float,4:float,5:float",
+    identna_resolution=200,
+    identna_effective_radius=0.15,
+    random_seed=42,
+    label="Production Sensor Data",
+    tag="Quality Control",
+    description="Sensor readings from production line A"
+)
+```
+
+##### Parameters for CSV Direct Processing
+
+**Column Control Parameters:**
+- `weight_option_str` (str): Weight specification for columns using 1-based indexing (e.g., "1:0,2:1,3:1" means column 1 has weight 0, columns 2 and 3 have weight 1)
+- `type_option_str` (str): Type specification for columns (e.g., "1:int,2:float,3:enum" specifies column types)
+- `drop_columns` (list): List of column names to exclude from processing
+
+**Important:** When `drop_columns` is specified, it takes precedence over `weight_option_str` and `type_option_str`. The dropped columns will automatically be assigned weight=0 and type=none, overriding any manual specifications.
+
+**identna Parameters:**
+- `identna_resolution` (int): Mesh resolution for normal area identification (default: 100)
+- `identna_effective_radius` (float): Effective radius ratio (default: 0.1)
+
+**Additional Parameters:**
+- `random_seed` (int): Random seed for reproducibility (default: 42)
+- `label` (str): Display name for the map
+- `tag` (str): Classification tag
+- `description` (str): Detailed description
+
+**Notes:**
+- This method processes CSV files directly without creating a DataFrame, making it efficient for large files
+- Single file can be passed as a string, multiple files as a list
+- Multiple CSV files are automatically merged into a single map
+
+#### 3. Creating a Base Map from WAV (Sound) Data
 
 ```python
 # Single WAV file processing
@@ -108,7 +172,7 @@ results = toorpia_client.fit_transform_waveform(
 
 **Note**: For WAV files, the sample rate is automatically detected from the file header. For CSV files, you must specify the sample rate using `mkfftseg_sr` parameter.
 
-#### 3. Adding Data to an Existing Map
+#### 4. Adding Data to an Existing Map
 
 ```python
 df_add = pd.read_csv("add.csv")
@@ -158,7 +222,7 @@ The `addplot` method now returns a dictionary containing:
 - `abnormalityScore`: Numerical abnormality score
 - `shareUrl`: Share URL for the updated map
 
-#### 3.1. Adding WAV/CSV Data to an Existing Map (Waveform Addplot)
+#### 4.1. Adding WAV/CSV Data to an Existing Map (Waveform Addplot)
 
 For WAV and CSV files, you can add waveform data to an existing map using the `addplot_waveform` method. This is particularly useful for acoustic monitoring, vibration analysis, and time-series anomaly detection.
 
@@ -269,7 +333,7 @@ The `addplot_waveform` method returns a dictionary with the following keys:
 - CSV files: Requires `mkfftseg_sr` parameter
 - Mixed processing: Both file types in a single operation
 
-#### 3.2. Working with Add Plot History
+#### 4.2. Working with Add Plot History
 
 toorPIA now supports maintaining a history of add plots for each map. This allows you to track multiple add plot operations and access their results at any time.
 
@@ -294,7 +358,7 @@ if add_plots:
         print(f"Status: {add_plot.get('status', 'Unknown')}")  # Display normal/abnormal determination result
 ```
 
-#### 4. Listing Available Maps
+#### 5. Listing Available Maps
 
 ```python
 map_list = toorpia_client.list_map()
@@ -313,7 +377,7 @@ The returned map data includes the following metadata in addition to the basic i
 - `description`: Detailed description of the map
 You can use these metadata to efficiently organize and search for maps.
 
-#### 4. Exporting a Map
+#### 6. Exporting a Map
 
 ```python
 map_no = toorpia_client.mapNo  # Or any valid map number
@@ -322,7 +386,7 @@ toorpia_client.export_map(map_no, "/path/to/export/directory")
 
 **Important Note**: The export operation only includes base map files. Add plot files are excluded from the export. If your map includes add plots, you'll need to recreate them after importing the map.
 
-#### 5. Importing a Map
+#### 7. Importing a Map
 
 ```python
 new_map_no = toorpia_client.import_map("/path/to/import/directory")

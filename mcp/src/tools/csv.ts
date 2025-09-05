@@ -464,6 +464,112 @@ async function csvRunRunner(args: any): Promise<CallToolResult> {
   }
 }
 
+// 6. Fit Transform CSV Form Tool
+async function fitTransformCsvform(args: any): Promise<CallToolResult> {
+  const startTime = Date.now();
+  try {
+    const {
+      path,
+      use_stored_schema = true,
+      drop_columns,
+      force_reload = false,
+      ...toorpiaParams
+    } = args;
+
+    // Validate CSV file exists
+    if (!existsSync(path)) {
+      const result = { ok: false, code: ERROR_CODES.NOT_FOUND, reason: `CSV file not found: ${path}` };
+      logTool("fit_transform_csvform", ERROR_CODES.NOT_FOUND, Date.now() - startTime);
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    }
+
+    // Determine columns to drop
+    let columnsToDrop: string[] = [];
+    
+    if (drop_columns) {
+      // Manual override takes precedence
+      columnsToDrop = drop_columns;
+    } else if (use_stored_schema) {
+      // Use stored schema
+      const schema = loadSchema(path);
+      if (schema) {
+        columnsToDrop = schema.columns
+          .filter(col => !col.use || col.weight === 0)
+          .map(col => col.name);
+      }
+    }
+    // If no schema and no manual override, use all columns (empty drop list)
+
+    // Read CSV data
+    const fileContent = readFileSync(path, 'utf-8');
+    const records = parse(fileContent, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true
+    });
+
+    if (records.length === 0) {
+      const result = { ok: false, code: ERROR_CODES.NOT_FOUND, reason: "No data found in CSV file" };
+      logTool("fit_transform_csvform", ERROR_CODES.NOT_FOUND, Date.now() - startTime);
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    }
+
+    // Get all column names
+    const allColumns = Object.keys(records[0]);
+    
+    // Validate drop_columns exist
+    if (columnsToDrop.length > 0) {
+      const invalidColumns = columnsToDrop.filter(col => !allColumns.includes(col));
+      if (invalidColumns.length > 0) {
+        const result = { 
+          ok: false, 
+          code: ERROR_CODES.UNKNOWN_COLUMN, 
+          reason: `Columns not found in CSV: ${invalidColumns.join(', ')}` 
+        };
+        logTool("fit_transform_csvform", ERROR_CODES.UNKNOWN_COLUMN, Date.now() - startTime);
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      }
+    }
+
+    // Filter columns
+    const columnsToKeep = allColumns.filter(col => !columnsToDrop.includes(col));
+    
+    if (columnsToKeep.length === 0) {
+      const result = { 
+        ok: false, 
+        code: ERROR_CODES.RUNTIME_ERROR, 
+        reason: "No columns remaining after filtering" 
+      };
+      logTool("fit_transform_csvform", ERROR_CODES.RUNTIME_ERROR, Date.now() - startTime);
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    }
+
+    // Convert to pandas DataFrame format (split orient)
+    const filteredRecords = records.map(record => 
+      columnsToKeep.reduce((filtered, col) => {
+        filtered[col] = record[col];
+        return filtered;
+      }, {} as any)
+    );
+
+    const data = {
+      columns: columnsToKeep,
+      data: filteredRecords.map(record => columnsToKeep.map(col => record[col])),
+      index: Array.from({length: filteredRecords.length}, (_, i) => i)
+    };
+
+    // Call toorPIA fit_transform
+    const result = await toorpiaClient.fitTransformSplit({ data, ...toorpiaParams });
+
+    logTool("fit_transform_csvform", "OK", Date.now() - startTime);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  } catch (error: any) {
+    const result = { ok: false, code: ERROR_CODES.RUNTIME_ERROR, reason: error.message };
+    logTool("fit_transform_csvform", ERROR_CODES.RUNTIME_ERROR, Date.now() - startTime);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  }
+}
+
 // CSV tool definitions
 const csvToolDefinitions = [
   // Legacy tools
@@ -550,6 +656,31 @@ const csvToolDefinitions = [
       scriptContent: z.string().describe("Python script content to execute")
     }),
     handler: csvRunRunner
+  },
+  // New CSV Form tool
+  {
+    name: "fit_transform_csvform",
+    description: "Create base map from CSV file with schema-based column filtering. Direct toorPIA API integration.",
+    inputSchema: z.object({
+      // Required
+      path: z.string().describe("Absolute path to CSV file"),
+      
+      // toorPIA standard parameters
+      label: z.string().optional(),
+      tag: z.string().optional(),
+      description: z.string().optional(),
+      random_seed: z.number().optional(),
+      weight_option_str: z.string().optional(),
+      type_option_str: z.string().optional(),
+      identna_resolution: z.number().optional(),
+      identna_effective_radius: z.number().optional(),
+      
+      // CSV-specific parameters
+      use_stored_schema: z.boolean().optional().describe("Use schema from csv.preview (default: true)"),
+      drop_columns: z.array(z.string()).optional().describe("Manual column exclusion override"),
+      force_reload: z.boolean().optional().describe("Ignore cached schema (default: false)")
+    }),
+    handler: fitTransformCsvform
   }
 ];
 

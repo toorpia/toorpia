@@ -208,6 +208,120 @@ class toorPIA:
                     pass
 
     @pre_authentication
+    def fit_transform_csvform(self, files, weight_option_str=None, type_option_str=None,
+                            drop_columns=None, label=None, tag=None, description=None,
+                            random_seed=42, identna_resolution=None, identna_effective_radius=None):
+        """
+        Process CSV files directly to generate base map using form data upload
+        
+        Args:
+            files (str or list): CSV file path or list of CSV file paths (required)
+            weight_option_str (str, optional): Weight options for columns (e.g., "1:1,2:0,3:1")
+            type_option_str (str, optional): Type options for columns (e.g., "1:float,2:none,3:int")
+            drop_columns (list, optional): List of column names to drop/exclude
+            label (str, optional): Map label
+            tag (str, optional): Map tag  
+            description (str, optional): Map description
+            random_seed (int, optional): Random seed for reproducibility (default: 42)
+            identna_resolution (int, optional): Mesh resolution (default: 100)
+            identna_effective_radius (float, optional): Effective radius ratio (default: 0.1)
+            
+        Returns:
+            numpy.ndarray: Coordinate data (each row is [x, y]) or None on failure
+        """
+        # File existence and format check (accept both string and list, same as waveform)
+        if isinstance(files, str):
+            files = [files]  # Convert single file to list
+        
+        if not files or not isinstance(files, list):
+            print("Error: files must be a file path (string) or list of file paths")
+            return None
+        
+        files_to_upload = []
+        for file_path in files:
+            if not os.path.exists(file_path):
+                print(f"Error: File not found: {file_path}")
+                return None
+            
+            # File format check (.csv only)
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext != '.csv':
+                print(f"Error: Unsupported file format: {ext}. Only .csv files are supported.")
+                return None
+            
+            files_to_upload.append(('files', open(file_path, 'rb')))
+        
+        try:
+            
+            # Prepare form data (same pattern as fit_transform_waveform)
+            form_data = {
+                'label': label or '',
+                'tag': tag or '',
+                'description': description or ''
+            }
+            
+            if random_seed != 42:
+                form_data['randomSeed'] = str(random_seed)
+            
+            # Add weight and type options
+            if weight_option_str is not None:
+                form_data['weight_option_str'] = weight_option_str
+            if type_option_str is not None:
+                form_data['type_option_str'] = type_option_str
+            
+            # Add drop_columns if specified
+            if drop_columns is not None and isinstance(drop_columns, list):
+                form_data['drop_columns'] = json.dumps(drop_columns)
+            
+            # Add identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = float(identna_effective_radius)
+            if identna_params:
+                form_data['identna_params'] = json.dumps(identna_params)
+            
+            # Send as multipart/form-data (same pattern as fit_transform_waveform)
+            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
+            response = requests.post(
+                f"{API_URL}/data/fit_transform_csvform",
+                files=files_to_upload,
+                data=form_data,
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                baseXyData = response_data['resdata']['baseXyData']
+                self.mapNo = response_data['resdata']['mapNo']
+                self.shareUrl = response_data.get('shareUrl')  # Save share URL
+                
+                np_array = np.array(baseXyData)  # Convert baseXyData to NumPy array
+                return np_array  # Return converted NumPy array
+            else:
+                try:
+                    error_message = response.json().get('message', 'Unknown error')
+                except:
+                    error_message = f"HTTP {response.status_code}: {response.text}"
+                print(f"CSV form data transformation failed. Server responded with error: {error_message}")
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error during CSV file upload: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"Error processing CSV form file: {str(e)}")
+            return None
+        finally:
+            # Ensure file handles are closed (same pattern as fit_transform_waveform)
+            for _, file_handle in files_to_upload:
+                try:
+                    file_handle.close()
+                except:
+                    pass
+
+    @pre_authentication
     def addplot(self, data, *args, weight_option_str=None, type_option_str=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
