@@ -3,9 +3,10 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { parse } from "csv-parse/sync";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { spawn, spawnSync } from "child_process";
 import { join, dirname } from "path";
+import { createHash } from "crypto";
 import { toorpiaClient } from "../client/toorpia.js";
 import { SplitDF } from "./common.js";
 import {
@@ -21,8 +22,42 @@ import {
   ExecutionResponse
 } from "../types.js";
 
-// Global schema storage - keyed by absolute path
-const schemaStore = new Map<string, Schema>();
+// Schema persistence directory
+const SCHEMA_DIR = join(process.cwd(), '.mcp-schemas');
+
+// Ensure schema directory exists
+function ensureSchemaDir(): void {
+  if (!existsSync(SCHEMA_DIR)) {
+    mkdirSync(SCHEMA_DIR, { recursive: true });
+  }
+}
+
+// Generate schema file path from CSV file path
+function getSchemaFilePath(csvPath: string): string {
+  const hash = createHash('md5').update(csvPath).digest('hex');
+  return join(SCHEMA_DIR, `${hash}.json`);
+}
+
+// Save schema to file
+function saveSchema(csvPath: string, schema: Schema): void {
+  ensureSchemaDir();
+  const schemaFilePath = getSchemaFilePath(csvPath);
+  writeFileSync(schemaFilePath, JSON.stringify(schema, null, 2), 'utf-8');
+}
+
+// Load schema from file
+function loadSchema(csvPath: string): Schema | null {
+  const schemaFilePath = getSchemaFilePath(csvPath);
+  if (!existsSync(schemaFilePath)) {
+    return null;
+  }
+  try {
+    const content = readFileSync(schemaFilePath, 'utf-8');
+    return JSON.parse(content) as Schema;
+  } catch (error) {
+    return null;
+  }
+}
 
 // Logging function
 function logTool(name: string, result: "OK" | string, durationMs: number): void {
@@ -170,8 +205,8 @@ async function csvPreview(args: any): Promise<CallToolResult> {
       description: `CSV file with ${records.length} rows and ${columnNames.length} columns`
     };
 
-    // Store schema in global storage
-    schemaStore.set(path, schema);
+    // Store schema to file
+    saveSchema(path, schema);
 
     const result: PreviewResponse = {
       ok: true,
@@ -181,8 +216,33 @@ async function csvPreview(args: any): Promise<CallToolResult> {
       sampleData: schema.sampleData
     };
 
+    // Format user-friendly display
+    const formattedColumns = columns.map(col => 
+      `- **${col.name}**: ${col.type} (weight: ${col.weight}, use: ${col.use})`
+    ).join('\n');
+    
+    const formattedSampleData = schema.sampleData.map((row, index) => 
+      `Row ${index + 1}: [${row.map(val => JSON.stringify(val)).join(', ')}]`
+    ).join('\n');
+
+    const userFriendlyText = `## CSV Schema Analysis
+
+**File:** ${result.filePath}
+**Total Rows:** ${result.rowCount}
+**Columns:** ${columns.length}
+
+### Column Types:
+${formattedColumns}
+
+### Sample Data (${nRows} rows):
+${formattedSampleData}
+
+---
+**Raw JSON Response:**
+${JSON.stringify(result)}`;
+
     logTool("csv.preview", "OK", Date.now() - startTime);
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    return { content: [{ type: "text", text: userFriendlyText }] };
   } catch (error: any) {
     const result = { ok: false, code: ERROR_CODES.RUNTIME_ERROR, reason: error.message };
     logTool("csv.preview", ERROR_CODES.RUNTIME_ERROR, Date.now() - startTime);
@@ -196,9 +256,9 @@ async function csvApplySchemaPatch(args: any): Promise<CallToolResult> {
   try {
     const { path, patches } = args;
     
-    const schema = schemaStore.get(path);
+    const schema = loadSchema(path);
     if (!schema) {
-      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}` };
+      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}. Please run csv.preview first.` };
       logTool("csv.apply_schema_patch", ERROR_CODES.SCHEMA_NOT_INITIALIZED, Date.now() - startTime);
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     }
@@ -224,8 +284,8 @@ async function csvApplySchemaPatch(args: any): Promise<CallToolResult> {
       updatedColumns.push(columnName);
     }
 
-    // Update schema in storage
-    schemaStore.set(path, schema);
+    // Update schema in file
+    saveSchema(path, schema);
 
     const result: PatchResponse = {
       ok: true,
@@ -247,9 +307,9 @@ async function csvGetSchema(args: any): Promise<CallToolResult> {
   try {
     const { path } = args;
     
-    const schema = schemaStore.get(path);
+    const schema = loadSchema(path);
     if (!schema) {
-      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}` };
+      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}. Please run csv.preview first.` };
       logTool("csv.get_schema", ERROR_CODES.SCHEMA_NOT_INITIALIZED, Date.now() - startTime);
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     }
@@ -274,9 +334,9 @@ async function csvGenerateRunner(args: any): Promise<CallToolResult> {
   try {
     const { path, outputPath } = args;
     
-    const schema = schemaStore.get(path);
+    const schema = loadSchema(path);
     if (!schema) {
-      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}` };
+      const result = { ok: false, code: ERROR_CODES.SCHEMA_NOT_INITIALIZED, reason: `Schema not found for path: ${path}. Please run csv.preview first.` };
       logTool("csv.generate_runner", ERROR_CODES.SCHEMA_NOT_INITIALIZED, Date.now() - startTime);
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     }
@@ -364,10 +424,12 @@ async function csvRunRunner(args: any): Promise<CallToolResult> {
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     }
 
-    // Execute Python script
+    // Execute Python script with output capture to prevent stdio conflicts
     const pythonProcess = spawnSync('python3', ['-c', scriptContent], {
       encoding: 'utf8',
-      timeout: 60000 // 60 second timeout
+      timeout: 10000, // Reduced to 10 second timeout for quick failures
+      stdio: ['ignore', 'pipe', 'pipe'], // Ignore stdin, capture stdout/stderr
+      windowsHide: true // Hide window on Windows
     });
 
     if (pythonProcess.error) {
@@ -398,6 +460,112 @@ async function csvRunRunner(args: any): Promise<CallToolResult> {
   } catch (error: any) {
     const result = { ok: false, code: ERROR_CODES.RUNTIME_ERROR, reason: error.message };
     logTool("csv.run_runner", ERROR_CODES.RUNTIME_ERROR, Date.now() - startTime);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  }
+}
+
+// 6. Fit Transform CSV Form Tool
+async function fitTransformCsvform(args: any): Promise<CallToolResult> {
+  const startTime = Date.now();
+  try {
+    const {
+      path,
+      use_stored_schema = true,
+      drop_columns,
+      force_reload = false,
+      ...toorpiaParams
+    } = args;
+
+    // Validate CSV file exists
+    if (!existsSync(path)) {
+      const result = { ok: false, code: ERROR_CODES.NOT_FOUND, reason: `CSV file not found: ${path}` };
+      logTool("fit_transform_csvform", ERROR_CODES.NOT_FOUND, Date.now() - startTime);
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    }
+
+    // Determine columns to drop
+    let columnsToDrop: string[] = [];
+    
+    if (drop_columns) {
+      // Manual override takes precedence
+      columnsToDrop = drop_columns;
+    } else if (use_stored_schema) {
+      // Use stored schema
+      const schema = loadSchema(path);
+      if (schema) {
+        columnsToDrop = schema.columns
+          .filter(col => !col.use || col.weight === 0)
+          .map(col => col.name);
+      }
+    }
+    // If no schema and no manual override, use all columns (empty drop list)
+
+    // Read CSV data
+    const fileContent = readFileSync(path, 'utf-8');
+    const records = parse(fileContent, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true
+    });
+
+    if (records.length === 0) {
+      const result = { ok: false, code: ERROR_CODES.NOT_FOUND, reason: "No data found in CSV file" };
+      logTool("fit_transform_csvform", ERROR_CODES.NOT_FOUND, Date.now() - startTime);
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    }
+
+    // Get all column names
+    const allColumns = Object.keys(records[0]);
+    
+    // Validate drop_columns exist
+    if (columnsToDrop.length > 0) {
+      const invalidColumns = columnsToDrop.filter(col => !allColumns.includes(col));
+      if (invalidColumns.length > 0) {
+        const result = { 
+          ok: false, 
+          code: ERROR_CODES.UNKNOWN_COLUMN, 
+          reason: `Columns not found in CSV: ${invalidColumns.join(', ')}` 
+        };
+        logTool("fit_transform_csvform", ERROR_CODES.UNKNOWN_COLUMN, Date.now() - startTime);
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      }
+    }
+
+    // Filter columns
+    const columnsToKeep = allColumns.filter(col => !columnsToDrop.includes(col));
+    
+    if (columnsToKeep.length === 0) {
+      const result = { 
+        ok: false, 
+        code: ERROR_CODES.RUNTIME_ERROR, 
+        reason: "No columns remaining after filtering" 
+      };
+      logTool("fit_transform_csvform", ERROR_CODES.RUNTIME_ERROR, Date.now() - startTime);
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    }
+
+    // Convert to pandas DataFrame format (split orient)
+    const filteredRecords = records.map(record => 
+      columnsToKeep.reduce((filtered, col) => {
+        filtered[col] = record[col];
+        return filtered;
+      }, {} as any)
+    );
+
+    const data = {
+      columns: columnsToKeep,
+      data: filteredRecords.map(record => columnsToKeep.map(col => record[col])),
+      index: Array.from({length: filteredRecords.length}, (_, i) => i)
+    };
+
+    // Call toorPIA fit_transform
+    const result = await toorpiaClient.fitTransformSplit({ data, ...toorpiaParams });
+
+    logTool("fit_transform_csvform", "OK", Date.now() - startTime);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  } catch (error: any) {
+    const result = { ok: false, code: ERROR_CODES.RUNTIME_ERROR, reason: error.message };
+    logTool("fit_transform_csvform", ERROR_CODES.RUNTIME_ERROR, Date.now() - startTime);
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   }
 }
@@ -488,6 +656,31 @@ const csvToolDefinitions = [
       scriptContent: z.string().describe("Python script content to execute")
     }),
     handler: csvRunRunner
+  },
+  // New CSV Form tool
+  {
+    name: "fit_transform_csvform",
+    description: "Create base map from CSV file with schema-based column filtering. Direct toorPIA API integration.",
+    inputSchema: z.object({
+      // Required
+      path: z.string().describe("Absolute path to CSV file"),
+      
+      // toorPIA standard parameters
+      label: z.string().optional(),
+      tag: z.string().optional(),
+      description: z.string().optional(),
+      random_seed: z.number().optional(),
+      weight_option_str: z.string().optional(),
+      type_option_str: z.string().optional(),
+      identna_resolution: z.number().optional(),
+      identna_effective_radius: z.number().optional(),
+      
+      // CSV-specific parameters
+      use_stored_schema: z.boolean().optional().describe("Use schema from csv.preview (default: true)"),
+      drop_columns: z.array(z.string()).optional().describe("Manual column exclusion override"),
+      force_reload: z.boolean().optional().describe("Ignore cached schema (default: false)")
+    }),
+    handler: fitTransformCsvform
   }
 ];
 

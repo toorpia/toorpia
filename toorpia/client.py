@@ -208,7 +208,121 @@ class toorPIA:
                     pass
 
     @pre_authentication
-    def addplot(self, data, *args, weight_option_str=None, type_option_str=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None):
+    def fit_transform_csvform(self, files, weight_option_str=None, type_option_str=None,
+                            drop_columns=None, label=None, tag=None, description=None,
+                            random_seed=42, identna_resolution=None, identna_effective_radius=None):
+        """
+        Process CSV files directly to generate base map using form data upload
+        
+        Args:
+            files (str or list): CSV file path or list of CSV file paths (required)
+            weight_option_str (str, optional): Weight options for columns (e.g., "1:1,2:0,3:1")
+            type_option_str (str, optional): Type options for columns (e.g., "1:float,2:none,3:int")
+            drop_columns (list, optional): List of column names to drop/exclude
+            label (str, optional): Map label
+            tag (str, optional): Map tag  
+            description (str, optional): Map description
+            random_seed (int, optional): Random seed for reproducibility (default: 42)
+            identna_resolution (int, optional): Mesh resolution (default: 100)
+            identna_effective_radius (float, optional): Effective radius ratio (default: 0.1)
+            
+        Returns:
+            numpy.ndarray: Coordinate data (each row is [x, y]) or None on failure
+        """
+        # File existence and format check (accept both string and list, same as waveform)
+        if isinstance(files, str):
+            files = [files]  # Convert single file to list
+        
+        if not files or not isinstance(files, list):
+            print("Error: files must be a file path (string) or list of file paths")
+            return None
+        
+        files_to_upload = []
+        for file_path in files:
+            if not os.path.exists(file_path):
+                print(f"Error: File not found: {file_path}")
+                return None
+            
+            # File format check (.csv only)
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext != '.csv':
+                print(f"Error: Unsupported file format: {ext}. Only .csv files are supported.")
+                return None
+            
+            files_to_upload.append(('files', open(file_path, 'rb')))
+        
+        try:
+            
+            # Prepare form data (same pattern as fit_transform_waveform)
+            form_data = {
+                'label': label or '',
+                'tag': tag or '',
+                'description': description or ''
+            }
+            
+            if random_seed != 42:
+                form_data['randomSeed'] = str(random_seed)
+            
+            # Add weight and type options
+            if weight_option_str is not None:
+                form_data['weight_option_str'] = weight_option_str
+            if type_option_str is not None:
+                form_data['type_option_str'] = type_option_str
+            
+            # Add drop_columns if specified
+            if drop_columns is not None and isinstance(drop_columns, list):
+                form_data['drop_columns'] = json.dumps(drop_columns)
+            
+            # Add identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = float(identna_effective_radius)
+            if identna_params:
+                form_data['identna_params'] = json.dumps(identna_params)
+            
+            # Send as multipart/form-data (same pattern as fit_transform_waveform)
+            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
+            response = requests.post(
+                f"{API_URL}/data/fit_transform_csvform",
+                files=files_to_upload,
+                data=form_data,
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                baseXyData = response_data['resdata']['baseXyData']
+                self.mapNo = response_data['resdata']['mapNo']
+                self.shareUrl = response_data.get('shareUrl')  # Save share URL
+                
+                np_array = np.array(baseXyData)  # Convert baseXyData to NumPy array
+                return np_array  # Return converted NumPy array
+            else:
+                try:
+                    error_message = response.json().get('message', 'Unknown error')
+                except:
+                    error_message = f"HTTP {response.status_code}: {response.text}"
+                print(f"CSV form data transformation failed. Server responded with error: {error_message}")
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error during CSV file upload: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"Error processing CSV form file: {str(e)}")
+            return None
+        finally:
+            # Ensure file handles are closed (same pattern as fit_transform_waveform)
+            for _, file_handle in files_to_upload:
+                try:
+                    file_handle.close()
+                except:
+                    pass
+
+    @pre_authentication
+    def addplot(self, data, *args, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
@@ -223,6 +337,15 @@ class toorPIA:
         # 重み付けオプションと型オプションを設定
         data_dict['weight_option_str'] = weight_option_str
         data_dict['type_option_str'] = type_option_str
+        
+        # identnaパラメータを追加
+        identna_params = {}
+        if identna_resolution is not None:
+            identna_params['resolution'] = identna_resolution
+        if identna_effective_radius is not None:
+            identna_params['effectiveRadius'] = identna_effective_radius
+        if identna_params:
+            data_dict['identnaParams'] = identna_params
         
         # detabnパラメータを追加
         if detabn_max_window is not None:
@@ -295,6 +418,8 @@ class toorPIA:
                         mkfftseg_di=1, mkfftseg_hp=-1.0, mkfftseg_lp=-1.0, 
                         mkfftseg_nm=0, mkfftseg_ol=50.0, mkfftseg_sr=48000,
                         mkfftseg_wf="hanning", mkfftseg_wl=65536,
+                        # identna parameters
+                        identna_resolution=None, identna_effective_radius=None,
                         # detabn parameters
                         detabn_max_window=5, detabn_rate_threshold=1.0, 
                         detabn_threshold=0, detabn_print_score=True):
@@ -312,6 +437,8 @@ class toorPIA:
             mkfftseg_sr (int): Sample rate (for CSV files)
             mkfftseg_wf (str): Window function ("hanning" or "hamming")
             mkfftseg_wl (int): Window length
+            identna_resolution (int, optional): Custom resolution for identna
+            identna_effective_radius (float, optional): Custom effective radius for identna
             detabn_max_window (int): Maximum window size for abnormality detection
             detabn_rate_threshold (float): Rate threshold for abnormality detection
             detabn_threshold (int): Threshold value for abnormality detection
@@ -363,6 +490,13 @@ class toorPIA:
                 'wl': int(mkfftseg_wl)
             }
             
+            # Prepare identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = float(identna_effective_radius)
+            
             # Prepare detabn parameters
             detabn_params = {
                 'maxWindow': int(detabn_max_window),
@@ -377,6 +511,8 @@ class toorPIA:
                 'mkfftseg_options': json.dumps(mkfftseg_options),
                 'detabn_options': json.dumps(detabn_params)
             }
+            if identna_params:
+                form_data['identna_options'] = json.dumps(identna_params)
             
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
             response = requests.post(
@@ -599,6 +735,142 @@ class toorPIA:
             error_message = response.json().get('message', 'Unknown error')
             print(f"Failed to list add plots. Server responded with error: {error_message}")
             return None
+
+    @pre_authentication
+    def addplot_csvform(self, files, mapNo=None, 
+                       # identna parameters
+                       identna_resolution=None, identna_effective_radius=None,
+                       # detabn parameters
+                       detabn_max_window=5, detabn_rate_threshold=1.0, 
+                       detabn_threshold=0, detabn_print_score=True):
+        """
+        Process CSV files for addplot (additional plot) analysis
+        Uses the same CSV processing options as the base map (stored in database)
+        
+        Args:
+            files (str or list): CSV file path or list of CSV file paths
+            mapNo (int, optional): Target map number. If None, uses current mapNo
+            identna_resolution (int, optional): Custom resolution for identna
+            identna_effective_radius (float, optional): Custom effective radius for identna
+            detabn_max_window (int): Maximum window size for abnormality detection
+            detabn_rate_threshold (float): Rate threshold for abnormality detection
+            detabn_threshold (int): Threshold value for abnormality detection
+            detabn_print_score (bool): Whether to print abnormality score
+            
+        Returns:
+            dict: Dictionary containing:
+                - xyData: Coordinate data as NumPy array (each row is [x, y])
+                - addPlotNo: Additional plot number
+                - abnormalityStatus: 'normal', 'abnormal', or 'unknown'
+                - abnormalityScore: Abnormality score (float or None)
+                - shareUrl: Share URL for the map with this addplot
+        """
+        # Determine target map number
+        target_mapNo = mapNo if mapNo is not None else self.mapNo
+        if target_mapNo is None:
+            print("Error: Map number is not specified. Please provide mapNo or use fit_transform_csvform() first.")
+            return None
+        
+        # File existence and format check (accept both string and list, same as csvform)
+        if isinstance(files, str):
+            files = [files]  # Convert single file to list
+        
+        if not files or not isinstance(files, list):
+            print("Error: files must be a file path (string) or list of file paths")
+            return None
+        
+        files_to_upload = []
+        for file_path in files:
+            if not os.path.exists(file_path):
+                print(f"Error: File not found: {file_path}")
+                return None
+            
+            # File format check (.csv only)
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext != '.csv':
+                print(f"Error: Unsupported file format: {ext}. Only .csv files are supported.")
+                return None
+            
+            files_to_upload.append(('files', open(file_path, 'rb')))
+        
+        try:
+            # Prepare identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = float(identna_effective_radius)
+            
+            # Prepare detabn parameters
+            detabn_params = {
+                'maxWindow': int(detabn_max_window),
+                'rateThreshold': float(detabn_rate_threshold),
+                'threshold': int(detabn_threshold),
+                'printScore': bool(detabn_print_score)
+            }
+            
+            # Send as form-data
+            form_data = {
+                'mapNo': str(target_mapNo),
+                'detabn_options': json.dumps(detabn_params)
+            }
+            if identna_params:
+                form_data['identna_options'] = json.dumps(identna_params)
+            
+            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
+            response = requests.post(
+                f"{API_URL}/data/addplot_csvform", 
+                files=files_to_upload,
+                data=form_data,
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                addXyData = response_data['resdata']
+                self.currentAddPlotNo = response_data.get('addPlotNo')  # Save addplot number
+                self.shareUrl = response_data.get('shareUrl')  # Save share URL
+                
+                # Convert coordinate data to NumPy array
+                np_array = np.array(addXyData)
+                
+                # Return extended result with coordinate data and abnormality information
+                result = {
+                    'xyData': np_array,
+                    'addPlotNo': self.currentAddPlotNo,
+                    'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
+                    'abnormalityScore': response_data.get('abnormalityScore'),    # Abnormality score
+                    'shareUrl': self.shareUrl
+                }
+                
+                return result
+            elif response.status_code == 400:
+                print("Error: Bad request. Invalid parameters or missing map.")
+                return None
+            elif response.status_code == 401:
+                print("Error: Unauthorized. Invalid session key or map number.")
+                return None
+            else:
+                try:
+                    error_message = response.json().get('message', 'Unknown error')
+                except:
+                    error_message = f"HTTP {response.status_code}: {response.text}"
+                print(f"CSV addplot failed. Server responded with error: {error_message}")
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error during file upload: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"Error processing CSV addplot: {str(e)}")
+            return None
+        finally:
+            # Ensure file handles are closed
+            for _, file_handle in files_to_upload:
+                try:
+                    file_handle.close()
+                except:
+                    pass
 
     @pre_authentication
     def get_addplot(self, map_no, addplot_no):
