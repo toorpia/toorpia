@@ -322,7 +322,7 @@ class toorPIA:
                     pass
 
     @pre_authentication
-    def addplot(self, data, *args, weight_option_str=None, type_option_str=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None):
+    def addplot(self, data, *args, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
@@ -337,6 +337,15 @@ class toorPIA:
         # 重み付けオプションと型オプションを設定
         data_dict['weight_option_str'] = weight_option_str
         data_dict['type_option_str'] = type_option_str
+        
+        # identnaパラメータを追加
+        identna_params = {}
+        if identna_resolution is not None:
+            identna_params['resolution'] = identna_resolution
+        if identna_effective_radius is not None:
+            identna_params['effectiveRadius'] = identna_effective_radius
+        if identna_params:
+            data_dict['identnaParams'] = identna_params
         
         # detabnパラメータを追加
         if detabn_max_window is not None:
@@ -409,6 +418,8 @@ class toorPIA:
                         mkfftseg_di=1, mkfftseg_hp=-1.0, mkfftseg_lp=-1.0, 
                         mkfftseg_nm=0, mkfftseg_ol=50.0, mkfftseg_sr=48000,
                         mkfftseg_wf="hanning", mkfftseg_wl=65536,
+                        # identna parameters
+                        identna_resolution=None, identna_effective_radius=None,
                         # detabn parameters
                         detabn_max_window=5, detabn_rate_threshold=1.0, 
                         detabn_threshold=0, detabn_print_score=True):
@@ -426,6 +437,8 @@ class toorPIA:
             mkfftseg_sr (int): Sample rate (for CSV files)
             mkfftseg_wf (str): Window function ("hanning" or "hamming")
             mkfftseg_wl (int): Window length
+            identna_resolution (int, optional): Custom resolution for identna
+            identna_effective_radius (float, optional): Custom effective radius for identna
             detabn_max_window (int): Maximum window size for abnormality detection
             detabn_rate_threshold (float): Rate threshold for abnormality detection
             detabn_threshold (int): Threshold value for abnormality detection
@@ -477,6 +490,13 @@ class toorPIA:
                 'wl': int(mkfftseg_wl)
             }
             
+            # Prepare identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = float(identna_effective_radius)
+            
             # Prepare detabn parameters
             detabn_params = {
                 'maxWindow': int(detabn_max_window),
@@ -491,6 +511,8 @@ class toorPIA:
                 'mkfftseg_options': json.dumps(mkfftseg_options),
                 'detabn_options': json.dumps(detabn_params)
             }
+            if identna_params:
+                form_data['identna_options'] = json.dumps(identna_params)
             
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
             response = requests.post(
@@ -716,6 +738,8 @@ class toorPIA:
 
     @pre_authentication
     def addplot_csvform(self, files, mapNo=None, 
+                       # identna parameters
+                       identna_resolution=None, identna_effective_radius=None,
                        # detabn parameters
                        detabn_max_window=5, detabn_rate_threshold=1.0, 
                        detabn_threshold=0, detabn_print_score=True):
@@ -726,6 +750,8 @@ class toorPIA:
         Args:
             files (str or list): CSV file path or list of CSV file paths
             mapNo (int, optional): Target map number. If None, uses current mapNo
+            identna_resolution (int, optional): Custom resolution for identna
+            identna_effective_radius (float, optional): Custom effective radius for identna
             detabn_max_window (int): Maximum window size for abnormality detection
             detabn_rate_threshold (float): Rate threshold for abnormality detection
             detabn_threshold (int): Threshold value for abnormality detection
@@ -768,6 +794,13 @@ class toorPIA:
             files_to_upload.append(('files', open(file_path, 'rb')))
         
         try:
+            # Prepare identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = float(identna_effective_radius)
+            
             # Prepare detabn parameters
             detabn_params = {
                 'maxWindow': int(detabn_max_window),
@@ -781,6 +814,8 @@ class toorPIA:
                 'mapNo': str(target_mapNo),
                 'detabn_options': json.dumps(detabn_params)
             }
+            if identna_params:
+                form_data['identna_options'] = json.dumps(identna_params)
             
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
             response = requests.post(

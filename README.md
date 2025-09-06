@@ -189,6 +189,23 @@ results_add = toorpia_client.addplot(df_add, 123)
 results_add = toorpia_client.addplot(df_add, "/path/to/basemap/data/directory")
 ```
 
+##### Advanced: Custom identna Parameters for Normal Area Generation
+
+You can override the base map's identna parameters for custom normal area generation when adding data:
+
+```python
+result = toorpia_client.addplot(
+    df_add,
+    identna_resolution=50,          # Custom mesh resolution (default: inherit from basemap)
+    identna_effective_radius=0.05   # Custom effective radius (default: inherit from basemap)
+)
+
+# When identna parameters are provided:
+# - A custom normal area file is generated using these parameters
+# - The AddPlot record shows source='custom' for parameter tracking
+# - If not provided, parameters are inherited from the basemap with source='basemap'
+```
+
 ##### Advanced: Custom detabn Parameters for Abnormality Detection
 
 You can customize the abnormality detection (detabn) parameters when adding data:
@@ -207,6 +224,11 @@ print(f"Abnormality Status: {result['abnormalityStatus']}")  # 'normal', 'abnorm
 print(f"Abnormality Score: {result['abnormalityScore']}")    # Numerical score
 print(f"XY Data: {result['xyData'].shape}")                  # NumPy array of coordinates
 ```
+
+**identna Parameters:**
+- `identna_resolution`: Custom mesh resolution for normal area generation (integer). If not provided, inherits from basemap
+- `identna_effective_radius`: Custom effective radius for normal area generation (float). If not provided, inherits from basemap
+- When custom identna parameters are provided, a new normal area file is generated and the parameter source is recorded as 'custom' for tracking purposes
 
 **detabn Parameters:**
 - `detabn_max_window`: Maximum number of sequential data points used for abnormality rate calculation
@@ -259,6 +281,10 @@ result = toorpia_client.addplot_waveform(
     mkfftseg_wl=16384,           # Window length: 16384 samples
     mkfftseg_wf="hamming",       # Hamming window
     mkfftseg_ol=75.0,            # 75% overlap
+    
+    # identna parameters for custom normal area generation (optional)
+    identna_resolution=100,      # Custom mesh resolution
+    identna_effective_radius=0.1, # Custom effective radius
     
     # detabn parameters for abnormality detection
     detabn_max_window=3,         # Maximum window size
@@ -348,9 +374,11 @@ result = toorpia_client.addplot_csvform("sensor_data.csv", mapNo=123)
 csv_files = ["batch1.csv", "batch2.csv", "batch3.csv"]
 result = toorpia_client.addplot_csvform(csv_files)
 
-# With abnormality detection parameters
+# With custom identna and abnormality detection parameters
 result = toorpia_client.addplot_csvform(
     "test_data.csv",
+    identna_resolution=150,      # Custom mesh resolution for normal area
+    identna_effective_radius=0.08, # Custom effective radius
     detabn_max_window=5,         # Maximum window size
     detabn_rate_threshold=0.8,   # Abnormality rate threshold
     detabn_threshold=0.1,        # Normal area threshold

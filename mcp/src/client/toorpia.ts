@@ -83,12 +83,14 @@ export class ToorPIAClient {
     data: { columns: string[]; index?: (number | string)[]; data: (number | null)[][] };
     mapNo?: number;
     weight_option_str?: string; type_option_str?: string;
+    identna_resolution?: number; identna_effective_radius?: number;
     detabn_max_window?: number; detabn_rate_threshold?: number; detabn_threshold?: number; detabn_print_score?: boolean;
   }): Promise<{ xyData: number[][]; addPlotNo?: number; abnormalityStatus?: string | null; abnormalityScore?: number | null; shareUrl?: string }>{
     await this.ensureAuth();
     const {
       data, mapNo,
       weight_option_str, type_option_str,
+      identna_resolution, identna_effective_radius,
       detabn_max_window, detabn_rate_threshold, detabn_threshold, detabn_print_score
     } = payload;
 
@@ -98,6 +100,12 @@ export class ToorPIAClient {
 
     body.weight_option_str = weight_option_str ?? null;
     body.type_option_str = type_option_str ?? null;
+
+    // identna parameters
+    const identnaParams: any = {};
+    if (typeof identna_resolution === "number") identnaParams.resolution = identna_resolution;
+    if (typeof identna_effective_radius === "number") identnaParams.effectiveRadius = identna_effective_radius;
+    if (Object.keys(identnaParams).length > 0) body.identnaParams = identnaParams;
 
     if (typeof detabn_max_window === "number") body.detabn_max_window = detabn_max_window;
     if (typeof detabn_rate_threshold === "number") body.detabn_rate_threshold = detabn_rate_threshold;
@@ -222,6 +230,7 @@ export class ToorPIAClient {
     mkfftseg_di?: number; mkfftseg_hp?: number; mkfftseg_lp?: number;
     mkfftseg_nm?: number; mkfftseg_ol?: number; mkfftseg_sr?: number;
     mkfftseg_wf?: string; mkfftseg_wl?: number;
+    identna_resolution?: number; identna_effective_radius?: number;
     detabn_max_window?: number; detabn_rate_threshold?: number;
     detabn_threshold?: number; detabn_print_score?: boolean;
   }): Promise<{ xyData: number[][]; addPlotNo?: number; abnormalityStatus?: string | null; abnormalityScore?: number | null; shareUrl?: string }> {
@@ -231,6 +240,7 @@ export class ToorPIAClient {
       mkfftseg_di = 1, mkfftseg_hp = -1.0, mkfftseg_lp = -1.0,
       mkfftseg_nm = 0, mkfftseg_ol = 50.0, mkfftseg_sr = 48000,
       mkfftseg_wf = "hanning", mkfftseg_wl = 65536,
+      identna_resolution, identna_effective_radius,
       detabn_max_window = 5, detabn_rate_threshold = 1.0,
       detabn_threshold = 0, detabn_print_score = true
     } = payload;
@@ -257,6 +267,10 @@ export class ToorPIAClient {
       wf: mkfftseg_wf, wl: mkfftseg_wl
     };
     
+    const identnaOptions: any = {};
+    if (typeof identna_resolution === "number") identnaOptions.resolution = identna_resolution;
+    if (typeof identna_effective_radius === "number") identnaOptions.effectiveRadius = identna_effective_radius;
+    
     const detabnOptions = {
       maxWindow: detabn_max_window, rateThreshold: detabn_rate_threshold,
       threshold: detabn_threshold, printScore: detabn_print_score
@@ -264,6 +278,9 @@ export class ToorPIAClient {
 
     formData.append('mapNo', targetMapNo.toString());
     formData.append('mkfftseg_options', JSON.stringify(mkfftsegOptions));
+    if (Object.keys(identnaOptions).length > 0) {
+      formData.append('identna_options', JSON.stringify(identnaOptions));
+    }
     formData.append('detabn_options', JSON.stringify(detabnOptions));
 
     const headers = { 'session-key': this.sessionKey! };

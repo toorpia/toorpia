@@ -23,17 +23,36 @@ print(f"Map No: {client.mapNo}")
 print(f"Share URL: {client.shareUrl}")
 
 # Now, add a plot using the same CSV file (this will use stored CSV options)
-print("\n=== Adding plot ===")
-addplot_result = client.addplot_csvform(
+print("\n=== Adding plot (inherits basemap identna) ===")
+addplot_result1 = client.addplot_csvform(
     csv_path,  # Same CSV file for addplot
     detabn_max_window=5,
     detabn_rate_threshold=1.0,
     detabn_threshold=0,
     detabn_print_score=True
 )
-print(f"Addplot result: {addplot_result}")
-if addplot_result:
-    print(f"Add Plot No: {addplot_result.get('addPlotNo')}")
-    print(f"Abnormality Status: {addplot_result.get('abnormalityStatus')}")
-    print(f"Abnormality Score: {addplot_result.get('abnormalityScore')}")
-    print(f"Share URL with addplot: {addplot_result.get('shareUrl')}")
+print(f"Addplot result 1: {addplot_result1}")
+if addplot_result1:
+    print(f"Add Plot No: {addplot_result1.get('addPlotNo')}")
+    print(f"Abnormality Status: {addplot_result1.get('abnormalityStatus')}")
+    print(f"Abnormality Score: {addplot_result1.get('abnormalityScore')}")
+    print(f"Share URL with addplot: {addplot_result1.get('shareUrl')}")
+
+# Add another plot with custom identna parameters
+print("\n=== Adding plot with custom identna parameters ===")
+addplot_result2 = client.addplot_csvform(
+    csv_path,  # Same CSV file for addplot
+    identna_resolution=100,      # Custom identna resolution (different from basemap)
+    identna_effective_radius=0.1, # Custom effective radius (different from basemap)
+    detabn_max_window=3,
+    detabn_rate_threshold=0.8,
+    detabn_threshold=0,
+    detabn_print_score=True
+)
+print(f"Addplot result 2: {addplot_result2}")
+if addplot_result2:
+    print(f"Add Plot No: {addplot_result2.get('addPlotNo')}")
+    print(f"Abnormality Status: {addplot_result2.get('abnormalityStatus')}")
+    print(f"Abnormality Score: {addplot_result2.get('abnormalityScore')}")
+    print(f"Share URL with addplot: {addplot_result2.get('shareUrl')}")
+    print(f"Custom identna parameters will create a 'custom' source entry in the database")
