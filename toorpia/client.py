@@ -414,29 +414,25 @@ class toorPIA:
 
     @pre_authentication
     def addplot_waveform(self, files, mapNo=None,
-                        # mkfftSeg parameters
-                        mkfftseg_di=1, mkfftseg_hp=-1.0, mkfftseg_lp=-1.0, 
-                        mkfftseg_nm=0, mkfftseg_ol=50.0, mkfftseg_sr=48000,
-                        mkfftseg_wf="hanning", mkfftseg_wl=65536,
                         # identna parameters
                         identna_resolution=None, identna_effective_radius=None,
                         # detabn parameters
                         detabn_max_window=5, detabn_rate_threshold=1.0, 
-                        detabn_threshold=0, detabn_print_score=True):
+                        detabn_threshold=0, detabn_print_score=True,
+                        # Legacy mkfftSeg parameters (deprecated - for backward compatibility warnings)
+                        mkfftseg_di=None, mkfftseg_hp=None, mkfftseg_lp=None, 
+                        mkfftseg_nm=None, mkfftseg_ol=None, mkfftseg_sr=None,
+                        mkfftseg_wf=None, mkfftseg_wl=None):
         """
         Process WAV or CSV files for addplot (additional plot) analysis
+        
+        IMPORTANT: For data consistency, this function automatically uses the same mkfftSeg 
+        options as the basemap. mkfftSeg parameters can no longer be specified manually 
+        to ensure that basemap and addplot use identical preprocessing parameters.
         
         Args:
             files (list): List of WAV/CSV file paths
             mapNo (int, optional): Target map number. If None, uses current mapNo
-            mkfftseg_di (int): Data Index (starting from 1, for CSV files)
-            mkfftseg_hp (float): High pass filter (-1 to disable)
-            mkfftseg_lp (float): Low pass filter (-1 to disable)
-            mkfftseg_nm (int): nMovingAverage (0 for auto-setting)
-            mkfftseg_ol (float): Overlap ratio (%)
-            mkfftseg_sr (int): Sample rate (for CSV files)
-            mkfftseg_wf (str): Window function ("hanning" or "hamming")
-            mkfftseg_wl (int): Window length
             identna_resolution (int, optional): Custom resolution for identna
             identna_effective_radius (float, optional): Custom effective radius for identna
             detabn_max_window (int): Maximum window size for abnormality detection
@@ -451,7 +447,26 @@ class toorPIA:
                 - abnormalityStatus: 'normal', 'abnormal', or 'unknown'
                 - abnormalityScore: Abnormality score (float or None)
                 - shareUrl: Share URL for the map with this addplot
+                
+        Note:
+            mkfftSeg options (filters, window settings, etc.) are automatically inherited
+            from the basemap to ensure data consistency and accurate anomaly detection.
         """
+        # Check for deprecated mkfftSeg parameters and warn users
+        deprecated_params = [
+            ('mkfftseg_di', mkfftseg_di), ('mkfftseg_hp', mkfftseg_hp),
+            ('mkfftseg_lp', mkfftseg_lp), ('mkfftseg_nm', mkfftseg_nm),
+            ('mkfftseg_ol', mkfftseg_ol), ('mkfftseg_sr', mkfftseg_sr),
+            ('mkfftseg_wf', mkfftseg_wf), ('mkfftseg_wl', mkfftseg_wl)
+        ]
+        
+        used_deprecated = [name for name, value in deprecated_params if value is not None]
+        if used_deprecated:
+            print("WARNING: mkfftSeg parameters are deprecated and will be ignored.")
+            print("For data consistency, the system automatically uses the basemap's mkfftSeg options.")
+            print(f"Deprecated parameters used: {', '.join(used_deprecated)}")
+            print("Please remove these parameters from your code.")
+        
         # Determine target map number
         target_mapNo = mapNo if mapNo is not None else self.mapNo
         if target_mapNo is None:
@@ -478,18 +493,6 @@ class toorPIA:
             files_to_upload.append(('files', open(file_path, 'rb')))
         
         try:
-            # Prepare mkfftSeg options in JSON format
-            mkfftseg_options = {
-                'di': int(mkfftseg_di),
-                'hp': float(mkfftseg_hp),
-                'lp': float(mkfftseg_lp),
-                'nm': int(mkfftseg_nm),
-                'ol': float(mkfftseg_ol),
-                'sr': int(mkfftseg_sr),
-                'wf': str(mkfftseg_wf),
-                'wl': int(mkfftseg_wl)
-            }
-            
             # Prepare identna parameters
             identna_params = {}
             if identna_resolution is not None:
@@ -508,7 +511,6 @@ class toorPIA:
             # Send as form-data
             form_data = {
                 'mapNo': str(target_mapNo),
-                'mkfftseg_options': json.dumps(mkfftseg_options),
                 'detabn_options': json.dumps(detabn_params)
             }
             if identna_params:
@@ -542,7 +544,16 @@ class toorPIA:
                 
                 return result
             elif response.status_code == 400:
-                print("Error: Bad request. Invalid parameters or missing map.")
+                try:
+                    error_response = response.json()
+                    error_code = error_response.get('error', '')
+                    if error_code == 'MKFFTSEG_OPTIONS_NOT_ALLOWED':
+                        print("Error: mkfftSeg options are not allowed in addplot_waveform.")
+                        print("The system automatically uses the basemap's mkfftSeg options for data consistency.")
+                    else:
+                        print("Error: Bad request. Invalid parameters or missing map.")
+                except:
+                    print("Error: Bad request. Invalid parameters or missing map.")
                 return None
             elif response.status_code == 401:
                 print("Error: Unauthorized. Invalid session key or map number.")
