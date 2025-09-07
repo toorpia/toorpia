@@ -926,6 +926,8 @@ class toorPIA:
         """
         追加プロットの特徴量を分析して取得する
         
+        Note: This function is not supported for waveform-based maps.
+        
         Args:
             map_no (int, optional): マップ番号。指定がない場合は現在のマップ番号を使用
             addplot_no (int, optional): 追加プロット番号。指定がない場合は現在の追加プロット番号を使用
@@ -974,8 +976,22 @@ class toorPIA:
             if response.status_code == 200:
                 result = response.json()
                 return result
+            elif response.status_code == 400:
+                try:
+                    error_response = response.json()
+                    error_code = error_response.get('error', '')
+                    if error_code == 'WAVEFORM_GETFEAT_NOT_SUPPORTED':
+                        print("Error: Feature analysis is not supported for waveform-based maps.")
+                    else:
+                        print(f"Failed to get add plot features: {error_response.get('message', 'Bad request')}")
+                except:
+                    print("Failed to get add plot features: Bad request")
+                return None
             else:
-                error_message = response.json().get('message', 'Unknown error')
+                try:
+                    error_message = response.json().get('message', 'Unknown error')
+                except:
+                    error_message = f"HTTP {response.status_code}"
                 print(f"Failed to get add plot features. Server responded with error: {error_message}")
                 print(f"Response status code: {response.status_code}")
                 return None

@@ -677,6 +677,20 @@ These features enable more sophisticated analysis workflows, such as:
 - Tracking changes in data over time
 - Building a history of analysis operations for better reproducibility
 
+#### Feature Analysis
+
+The client provides the `get_addplot_features()` method for detailed feature analysis of add plots:
+
+```python
+# Get detailed feature analysis for a specific add plot
+features = toorpia_client.get_addplot_features(map_no=123, addplot_no=1)
+
+# Convert to pandas DataFrame for easier analysis
+df = toorpia_client.to_dataframe(features)
+```
+
+**Important**: Feature analysis is only supported for DataFrame and CSV-based maps. This function is **not available for waveform-based maps** due to technical limitations.
+
 ## Error Handling
 
 The client provides informative error messages for various scenarios, including authentication failures, invalid requests, and server errors. Always check the return values and handle potential errors in your code.
