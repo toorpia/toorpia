@@ -2,23 +2,20 @@
 
 toorPIA is a Python library for generating anomaly detection maps from CSV and audio data, enabling visual data analysis.
 
-## Installation
-
-```bash
-pip install git+https://github.com/toorpia/toorpia.git
-```
+---
 
 ## Quick Start
 
 ### Try the Interactive Notebook First (Recommended)
 
 For hands-on experience, run the interactive Jupyter notebook:
-```bash
-# Open with Jupyter
-jupyter notebook samples/test_toorpia_api.ipynb
 
-# Or open directly in Google Colab:
-# https://colab.research.google.com/github/toorpia/toorpia/blob/main/samples/test_toorpia_api.ipynb
+**Google Colab (recommended):**  
+[Open in Google Colab](https://colab.research.google.com/github/toorpia/toorpia/blob/main/samples/test_toorpia_api.ipynb)
+
+**Local Jupyter:**
+```bash
+jupyter notebook samples/test_toorpia_api.ipynb
 ```
 
 ### API Key Setup
@@ -27,9 +24,27 @@ To get your API key:
 1. Log in to https://api.toorpia.com/ with your account credentials provided by toor
 2. Generate an API Key in the dashboard
 
-Then set the environment variable:
+Then configure the API key in your environment:
+
+**For Google Colab (recommended):**
+1. Click the 🔑 (key icon) in the left panel
+2. Click "New secret" 
+3. Name: `TOORPIA_API_KEY`, Value: your actual API key
+4. Save
+
+**For local environment:**
 ```bash
 export TOORPIA_API_KEY='your-api-key'
+```
+
+---
+
+## Installation
+
+For local development and production use, install toorPIA in your Python environment:
+
+```bash
+pip install git+https://github.com/toorpia/toorpia.git
 ```
 
 ### Basic Usage
@@ -118,23 +133,67 @@ Anomalous data points are visually indicated by red × marks in Map Inspector.
 
 ### Return Value Structure
 
+#### `fit_transform()` Return Value
+
+**Data Structure:**
 ```python
-# fit_transform return value
-numpy.ndarray                    # 2D coordinate data (each row is [x, y])
+result = client.fit_transform(df)
+# Returns: numpy array with shape (n_samples, 2)
+# [[x1, y1],
+#  [x2, y2], 
+#  [x3, y3],
+#  ...]
+```
 
-# Additional attributes set on client instance:
-# client.mapNo        - Map number (int)
-# client.shareUrl     - Map Inspector URL (string)
+**How to Use:**
+```python
+# Get X coordinates (all rows, column 0)
+x_coords = result[:,0]
 
-# addplot return value
+# Get Y coordinates (all rows, column 1) 
+y_coords = result[:,1]
+
+# Plot the results
+import matplotlib.pyplot as plt
+plt.scatter(x_coords, y_coords)
+# Or simply: plt.scatter(result[:,0], result[:,1])
+```
+
+**Client attributes automatically set:**
+- `client.mapNo` - Map ID number for future reference
+- `client.shareUrl` - Clickable URL to view results online
+
+#### `addplot()` Return Value
+
+**Data Structure:**
+```python
+result = client.addplot(new_data)
+# Returns: Dictionary with multiple pieces of information
 {
-    'xyData': numpy.ndarray,        # 2D coordinate data
-    'addPlotNo': 1,                 # Add plot number
-    'abnormalityStatus': 'normal',  # 'normal', 'abnormal', 'unknown'
-    'abnormalityScore': 0.25,       # Anomaly score (numeric)
-    'shareUrl': 'http://...'        # Map Inspector URL
+    'xyData': numpy.ndarray,        # Same structure as fit_transform result
+    'addPlotNo': 1,                 # Sequential number for this addition
+    'abnormalityStatus': 'normal',  # 'normal', 'abnormal', or 'unknown'
+    'abnormalityScore': 0.25,       # Numerical anomaly score
+    'shareUrl': 'http://...'        # Updated URL including this addition
 }
 ```
+
+**How to Use:**
+```python
+# Extract coordinate data for plotting
+coords = result['xyData']
+x_coords = coords[:,0] 
+y_coords = coords[:,1]
+
+# Check anomaly detection results
+if result['abnormalityStatus'] == 'abnormal':
+    print(f"⚠️  Anomaly detected! Score: {result['abnormalityScore']}")
+    
+# View results online
+print(f"🌐 View results: {result['shareUrl']}")
+```
+
+---
 
 ## Advanced Usage
 
@@ -171,11 +230,15 @@ test_result = client.addplot_waveform(
 )
 ```
 
+---
+
 ## Documentation
 
 - **[API Reference](docs/api-reference.md)** - Detailed specifications for all methods and parameters
 - **[Map Inspector Guide](docs/map-inspector.md)** - Visual analysis tool usage
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
+
+---
 
 ## Key Features
 
@@ -196,6 +259,8 @@ test_result = client.addplot_waveform(
 - Heatmap display
 - Sub-map generation and data cleansing
 
+---
+
 ## Environment Configuration
 
 ### API Configuration
@@ -210,6 +275,8 @@ export TOORPIA_API_URL='http://your-server:3000'
 
 ### MCP Server for Claude Desktop
 
+> ⚠️ **Work In Progress** - This feature is currently under development and may not work as expected.
+
 Integration with Claude Desktop enables natural language toorPIA operations:
 
 ```bash
@@ -218,16 +285,3 @@ cd mcp && npm install && npm run build
 
 For details, see [mcp/README.md](./mcp/README.md).
 
-## Samples and Learning Resources
-
-- `samples/biopsy.csv` - Medical diagnostic data sample
-- `samples/biopsy-add.csv` - Sample for additional plotting
-
-## Support
-
-- GitHub Issues: Bug reports and feature requests
-- Documentation: Latest usage and best practices
-
----
-
-**Next Steps**: Check the [API Reference](docs/api-reference.md) for detailed customization methods.
