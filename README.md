@@ -17,7 +17,8 @@ For hands-on experience, run the interactive Jupyter notebook:
 # Open with Jupyter
 jupyter notebook samples/test_toorpia_api.ipynb
 
-# Or try with Google Colab (upload the notebook file)
+# Or open directly in Google Colab:
+# https://colab.research.google.com/github/toorpia/toorpia/blob/main/samples/test_toorpia_api.ipynb
 ```
 
 ### API Key Setup
