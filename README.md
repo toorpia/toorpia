@@ -10,8 +10,23 @@ pip install git+https://github.com/toorpia/toorpia.git
 
 ## Quick Start
 
-### Environment Setup
+### Try the Interactive Notebook First (Recommended)
 
+For hands-on experience, run the interactive Jupyter notebook:
+```bash
+# Open with Jupyter
+jupyter notebook samples/test_toorpia_api.ipynb
+
+# Or try with Google Colab (upload the notebook file)
+```
+
+### API Key Setup
+
+To get your API key:
+1. Log in to https://api.toorpia.com/ with your account credentials provided by toor
+2. Generate an API Key in the dashboard
+
+Then set the environment variable:
 ```bash
 export TOORPIA_API_KEY='your-api-key'
 ```
@@ -104,10 +119,11 @@ Anomalous data points are visually indicated by red × marks in Map Inspector.
 
 ```python
 # fit_transform return value
-{
-    'mapNo': 123,              # Map number
-    'shareUrl': 'http://...'   # Map Inspector URL
-}
+numpy.ndarray                    # 2D coordinate data (each row is [x, y])
+
+# Additional attributes set on client instance:
+# client.mapNo        - Map number (int)
+# client.shareUrl     - Map Inspector URL (string)
 
 # addplot return value
 {
