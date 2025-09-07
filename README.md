@@ -248,6 +248,8 @@ The `addplot` method now returns a dictionary containing:
 
 For WAV and CSV files, you can add waveform data to an existing map using the `addplot_waveform` method. This is particularly useful for acoustic monitoring, vibration analysis, and time-series anomaly detection.
 
+**Important**: The `addplot_waveform` method automatically uses the same mkfftSeg preprocessing parameters (filters, window settings, etc.) as the basemap to ensure data consistency and accurate anomaly detection results.
+
 ```python
 # Basic usage - add WAV file to the most recent map
 result = toorpia_client.addplot_waveform(["new_audio.wav"])
@@ -261,11 +263,7 @@ result = toorpia_client.addplot_waveform(wav_files)
 
 # Mixed file types (WAV + CSV)
 mixed_files = ["vibration.csv", "audio.wav"]
-result = toorpia_client.addplot_waveform(
-    files=mixed_files,
-    mkfftseg_sr=44100,  # Sample rate for CSV files
-    mkfftseg_di=2       # Use 2nd column of CSV as amplitude data
-)
+result = toorpia_client.addplot_waveform(files=mixed_files)
 ```
 
 ##### Advanced Parameter Customization
@@ -274,13 +272,6 @@ result = toorpia_client.addplot_waveform(
 result = toorpia_client.addplot_waveform(
     files=["machine_sound.wav"],
     mapNo=toorpia_client.mapNo,  # Target map
-    
-    # mkfftSeg parameters (same as fit_transform_waveform)
-    mkfftseg_hp=200.0,           # High-pass filter: 200Hz
-    mkfftseg_lp=10000.0,         # Low-pass filter: 10kHz
-    mkfftseg_wl=16384,           # Window length: 16384 samples
-    mkfftseg_wf="hamming",       # Hamming window
-    mkfftseg_ol=75.0,            # 75% overlap
     
     # identna parameters for custom normal area generation (optional)
     identna_resolution=100,      # Custom mesh resolution
@@ -309,15 +300,16 @@ print(f"Share URL: {result['shareUrl']}")
 baseline_files = ["normal_operation_1.wav", "normal_operation_2.wav"]
 baseline_result = toorpia_client.fit_transform_waveform(
     files=baseline_files,
+    mkfftseg_hp=100.0,  # Configure preprocessing for baseline
+    mkfftseg_lp=8000.0, # These settings will be used for all addplots
     label="Machine Baseline - Normal Operation",
     tag="Acoustic Monitoring"
 )
 
 # Add potentially abnormal sound for comparison
+# Note: mkfftSeg parameters are automatically inherited from baseline
 test_result = toorpia_client.addplot_waveform(
     files=["suspicious_sound.wav"],
-    mkfftseg_hp=100.0,  # Filter out low-frequency noise
-    mkfftseg_lp=8000.0, # Focus on relevant frequency range
     detabn_rate_threshold=0.7  # Sensitive abnormality detection
 )
 
@@ -328,14 +320,21 @@ if test_result['abnormalityStatus'] == 'abnormal':
 
 **Vibration Analysis Example:**
 ```python
-# Analyze vibration data from CSV files
-vibration_result = toorpia_client.addplot_waveform(
-    files=["vibration_sensor.csv"],
+# Create baseline with appropriate CSV settings
+baseline_result = toorpia_client.fit_transform_waveform(
+    files=["baseline_vibration.csv"],
     mkfftseg_di=3,      # Use 3rd column (acceleration data)
     mkfftseg_sr=1000,   # 1kHz sampling rate
     mkfftseg_wl=2048,   # Shorter window for vibration analysis
+    label="Vibration Baseline"
+)
+
+# Analyze new vibration data with consistent preprocessing
+vibration_result = toorpia_client.addplot_waveform(
+    files=["vibration_sensor.csv"],
     detabn_max_window=5 # Analyze 5-point sequences
 )
+# mkfftSeg settings (di=3, sr=1000, wl=2048) are automatically applied
 ```
 
 ##### Return Value Details
@@ -350,13 +349,21 @@ The `addplot_waveform` method returns a dictionary with the following keys:
 
 ##### Parameter Reference
 
-**mkfftSeg Parameters**: Same as `fit_transform_waveform` (see Section 2 for details)
+**Preprocessing Consistency**: mkfftSeg parameters (filters, window settings, etc.) are automatically inherited from the basemap to ensure data consistency. These cannot be customized in addplot operations.
 
-**detabn Parameters**: Same as regular `addplot` (see Section 3 for details)
+**identna Parameters** (optional - for custom normal area generation):
+- `identna_resolution` (int): Custom mesh resolution for normal area generation
+- `identna_effective_radius` (float): Custom effective radius for normal area generation
+
+**detabn Parameters** (for abnormality detection):
+- `detabn_max_window` (int): Maximum window size for abnormality detection
+- `detabn_rate_threshold` (float): Rate threshold for abnormality detection  
+- `detabn_threshold` (int): Threshold value for abnormality detection
+- `detabn_print_score` (bool): Whether to print abnormality score details
 
 **File Support**: 
 - WAV files: Automatic sample rate detection
-- CSV files: Requires `mkfftseg_sr` parameter
+- CSV files: Sample rate and column settings inherited from basemap
 - Mixed processing: Both file types in a single operation
 
 #### 4.2. Adding CSV Data to CSV-based Maps (CSV Addplot)
