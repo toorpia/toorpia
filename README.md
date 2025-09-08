@@ -1,6 +1,6 @@
 # toorPIA API Client
 
-toorPIA is a Python library for generating anomaly detection maps from CSV and audio data, enabling visual data analysis.
+This is a Python library for generating toorPIA maps from CSV and audio data, enabling visual data analysis.
 
 ---
 
