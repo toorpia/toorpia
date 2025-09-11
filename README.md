@@ -47,188 +47,220 @@ For local development and production use, install toorPIA in your Python environ
 pip install git+https://github.com/toorpia/toorpia.git
 ```
 
-### Basic Usage
+### Core Workflow: Basemap → Addplot Analysis
 
-Let's explore toorPIA's core features using sample data.
+toorPIA follows a simple two-step workflow for data analysis and anomaly detection:
+
+1. **Create Base Map**: Establish normal data patterns using `basemap_*()` methods
+2. **Add New Data**: Test new data for anomalies using `addplot_*()` methods
+
+## CSV Data Analysis
+
+### Step 1: Create Base Map from CSV
 
 ```python
 from toorpia import toorPIA
-import pandas as pd
 
-# Create API client
+# Initialize client
 client = toorPIA()
 
-# Load sample data
-df = pd.read_csv("samples/biopsy.csv")
-
-# Examine data structure
-print(f"Data shape: {df.shape}")
-print(f"Columns: {df.columns.tolist()}")
-print(df.head(3))
-```
-
-**Output example:**
-```
-Data shape: (683, 11)
-Columns: ['No', 'ID', 'Clump Thickness', 'Uniformity of Cell Size', ...]
-   No        ID  Clump Thickness  Uniformity of Cell Size  ...
-0   1   1000025                5                        1  ...
-1   2   1002945                5                        4  ...
-2   3   1015425                3                        1  ...
-```
-
-### Creating a Base Map
-
-Remove management columns and create a base map for analysis.
-
-```python
-# Prepare analysis DataFrame by excluding management columns
-analysis_df = df.drop(columns=['No', 'ID', 'Diagnosis'])
-
-# Create base map (execution time: ~5 seconds)
-result = client.fit_transform(
-    analysis_df,
-    label="Breast Cancer Biopsy Data",
-    tag="Medical Analysis",
-    description="Wisconsin Breast Cancer diagnostic features"
+# Create base map from CSV file
+result = client.basemap_csv(
+    "samples/biopsy.csv",
+    weight_option_str="1:0,2:0,3:1,4:1,5:1,6:1,7:1,8:1,9:1,10:1,11:1,12:0",
+    type_option_str="1:int,2:none,3:float,4:float,5:float,6:float,7:float,8:float,9:float,10:float,11:float,12:enum",
+    # drop_columns=["No", "ID"],  # Alternative: automatic column exclusion
+    label="Breast Cancer Biopsy Analysis",
+    tag="Medical Diagnostics",
+    identna_resolution=200,
+    identna_effective_radius=0.2
 )
 
-print(f"Map Number: {client.mapNo}")
-print(f"Map Inspector URL: {client.shareUrl}")
+print(f"✅ Base map created!")
+print(f"Map Number: {result['mapNo']}")
+print(f"Coordinates Shape: {result['xyData'].shape}")  
+print(f"🌐 View Map: {result['shareUrl']}")
 ```
 
-### Visual Analysis
+**Tip:** For simpler column exclusion, use `drop_columns=["No", "ID"]` instead of manual weight/type specifications. Note that `drop_columns` takes precedence over `weight_option_str`/`type_option_str`.
 
-The generated map can be analyzed visually in your browser.
+### Step 2: Add New Data for Anomaly Detection
 
 ```python
-# Open Map Inspector in browser for visualization
-print(f"🌐 View base map: {client.shareUrl}")
+# Test new data against the latest base map
+addplot_result = client.addplot_csvform("new_data.csv")
+
+# Or specify a previous basemap by map number
+addplot_result = client.addplot_csvform("new_data.csv", mapNo=123)
+
+print(f"Abnormality Status: {addplot_result['abnormalityStatus']}")
+if addplot_result['abnormalityStatus'] == 'abnormal':
+    print(f"🚨 Anomaly detected! Score: {addplot_result['abnormalityScore']:.3f}")
+else:
+    print(f"✅ Data is normal")
+
+print(f"🌐 View Results: {addplot_result['shareUrl']}")
 ```
 
-Map Inspector provides:
-- Green point clouds showing normal data distribution
-- Concentric grid patterns representing normal regions
-- Interactive data exploration capabilities
+## Audio & Acoustic Analysis
 
-### Adding New Data and Anomaly Detection
+### Step 1: Create Base Map from Audio Files  
 
 ```python
-# Load additional data
-df_add = pd.read_csv("samples/biopsy-add.csv")
+# Create base map from multiple WAV files
+result = client.basemap_waveform(
+    ["machine1.wav", "machine2.wav", "machine3.wav"],
+    mkfftseg_hp=1000.0,     # High-pass filter at 1kHz
+    mkfftseg_lp=8000.0,     # Low-pass filter at 8kHz  
+    mkfftseg_wl=4096,       # FFT window length
+    mkfftseg_wf="hamming",  # Window function
+    label="Machine Sound Baseline",
+    tag="Acoustic Monitoring",
+    identna_resolution=150
+)
 
-# Remove management columns consistently
-analysis_add = df_add.drop(columns=['No', 'ID', 'Diagnosis'])
-
-# Perform anomaly detection
-result_add = client.addplot(analysis_add)
-
-# Check results
-print(f"🚨 Anomaly detection results: {client.shareUrl}")
-print(f"Abnormality Status: {result_add['abnormalityStatus']}")
-print(f"Abnormality Score: {result_add['abnormalityScore']:.3f}")
+print(f"✅ Audio base map created!")
+print(f"Map Number: {result['mapNo']}")
+print(f"🌐 View Spectral Map: {result['shareUrl']}")
 ```
 
-Anomalous data points are visually indicated by red × marks in Map Inspector.
+### Step 2: Detect Audio Anomalies
 
-### Return Value Structure
-
-#### `fit_transform()` Return Value
-
-**Data Structure:**
 ```python
-result = client.fit_transform(df)
-# Returns: numpy array with shape (n_samples, 2)
-# [[x1, y1],
-#  [x2, y2], 
-#  [x3, y3],
-#  ...]
+# Test suspicious audio against the latest basemap
+test_result = client.addplot_waveform(["suspicious_sound.wav"])
+
+# Or test against a specific previous basemap
+test_result = client.addplot_waveform(["suspicious_sound.wav"], mapNo=456)
+
+if test_result['abnormalityStatus'] == 'abnormal':
+    print(f"🚨 Acoustic anomaly detected!")
+    print(f"Abnormality Score: {test_result['abnormalityScore']:.3f}")
+    print(f"This sound pattern deviates from normal baseline")
+else:
+    print(f"✅ Audio pattern is normal")
+
+print(f"🌐 View Analysis: {test_result['shareUrl']}")
 ```
 
-**How to Use:**
+## Visual Analysis with Map Inspector
+
+All basemap and addplot operations generate interactive visualizations accessible through share URLs.
+
+**Map Inspector Features:**
+- **Green point clouds**: Normal baseline data distribution  
+- **Red × marks**: Anomalous data points (when detected)
+- **Concentric grid patterns**: Normal regions and boundaries
+- **Interactive controls**: Zoom, filter, region selection
+- **Statistical analysis**: Data distribution metrics
+
+## API Reference
+
+### Unified Return Value Structure
+
+All `basemap_*()` and `addplot_*()` methods return consistent dictionary structures:
+
+#### `basemap_csv()` and `basemap_waveform()` Return Values
+
 ```python
-# Get X coordinates (all rows, column 0)
-x_coords = result[:,0]
+result = client.basemap_csv("data.csv")
+# or
+result = client.basemap_waveform(["audio1.wav", "audio2.wav"])
 
-# Get Y coordinates (all rows, column 1) 
-y_coords = result[:,1]
-
-# Plot the results
-import matplotlib.pyplot as plt
-plt.scatter(x_coords, y_coords)
-# Or simply: plt.scatter(result[:,0], result[:,1])
-```
-
-**Client attributes automatically set:**
-- `client.mapNo` - Map ID number for future reference
-- `client.shareUrl` - Clickable URL to view results online
-
-#### `addplot()` Return Value
-
-**Data Structure:**
-```python
-result = client.addplot(new_data)
-# Returns: Dictionary with multiple pieces of information
+# Returns: Dictionary with structured metadata
 {
-    'xyData': numpy.ndarray,        # Same structure as fit_transform result
-    'addPlotNo': 1,                 # Sequential number for this addition
-    'abnormalityStatus': 'normal',  # 'normal', 'abnormal', or 'unknown'
-    'abnormalityScore': 0.25,       # Numerical anomaly score
-    'shareUrl': 'http://...'        # Updated URL including this addition
+    'xyData': numpy.ndarray,     # Coordinate data (n_samples, 2)
+    'mapNo': 12345,              # Map identification number  
+    'shareUrl': 'http://...'     # Interactive visualization URL
+}
+
+# Client instance attributes are also automatically updated:
+print(f"Current map: {client.mapNo}")     # Same as result['mapNo']
+print(f"View online: {client.shareUrl}")  # Same as result['shareUrl']
+```
+
+#### `addplot_csvform()` and `addplot_waveform()` Return Values
+
+```python
+result = client.addplot_csvform("new_data.csv")
+# or 
+result = client.addplot_waveform(["new_audio.wav"])
+
+# Returns: Dictionary with anomaly detection results
+{
+    'xyData': numpy.ndarray,           # Coordinate data (n_samples, 2)
+    'addPlotNo': 1,                    # Sequential addplot number
+    'abnormalityStatus': 'abnormal',   # 'normal', 'abnormal', 'unknown'
+    'abnormalityScore': 2.47,          # Numerical anomaly score
+    'shareUrl': 'http://...'           # Updated visualization URL
 }
 ```
 
-**How to Use:**
+**Working with Coordinate Data:**
 ```python
 # Extract coordinate data for plotting
 coords = result['xyData']
 x_coords = coords[:,0] 
 y_coords = coords[:,1]
 
-# Check anomaly detection results
-if result['abnormalityStatus'] == 'abnormal':
-    print(f"⚠️  Anomaly detected! Score: {result['abnormalityScore']}")
+# Create custom visualization
+import matplotlib.pyplot as plt
+plt.figure(figsize=(10, 8))
+plt.scatter(x_coords, y_coords, alpha=0.6)
+plt.title("Data Distribution Map")
+plt.xlabel("X Coordinate")
+plt.ylabel("Y Coordinate")
+plt.show()
+
+# Check anomaly detection results (for addplot methods)
+if 'abnormalityStatus' in result:
+    if result['abnormalityStatus'] == 'abnormal':
+        print(f"⚠️  Anomaly detected! Score: {result['abnormalityScore']}")
+    else:
+        print(f"✅ Data is within normal patterns")
     
-# View results online
-print(f"🌐 View results: {result['shareUrl']}")
+# View interactive results online
+print(f"🌐 Explore data: {result['shareUrl']}")
 ```
 
 ---
 
-## Advanced Usage
+## Advanced Features
 
-### Direct Processing of Large CSV Files
+### Alternative: DataFrame-based Processing
 
-Memory-efficient direct processing of CSV files:
+Similar to scikit-learn's PCA or t-SNE, you can use `fit_transform()` for direct DataFrame processing:
 
-```python
-# Direct CSV processing (memory efficient)
-result = client.fit_transform_csvform(
-    "large_dataset.csv",
-    drop_columns=["ID", "Timestamp"],  # Exclude unnecessary columns
-    identna_resolution=200,            # High resolution
-    label="Production Line Data"
+```python  
+import pandas as pd
+
+# Load data into DataFrame
+df = pd.read_csv("data.csv")
+df_clean = df.drop(columns=['ID', 'Timestamp'])  # Pandas-based column removal
+
+# Create base map from DataFrame (returns coordinate array)
+coords = client.fit_transform(
+    df_clean,
+    label="DataFrame-based Processing",
+    identna_resolution=150
 )
+
+print(f"Coordinate data shape: {coords.shape}")  # (n_samples, 2)
+
+# Client instance attributes are automatically updated:
+print(f"Map Number: {client.mapNo}")
+print(f"Share URL: {client.shareUrl}")
+
+# Add new data for anomaly detection
+df_new = pd.read_csv("new_data.csv").drop(columns=['ID', 'Timestamp'])
+addplot_result = client.addplot(df_new)
+print(f"Anomaly status: {addplot_result['abnormalityStatus']}")
 ```
 
-### Audio and Vibration Data Analysis
-
-Feature extraction from WAV files or CSV time-series data:
-
-```python
-# Audio data analysis
-result = client.fit_transform_waveform(
-    files=["machine_sound.wav"],
-    mkfftseg_hp=100.0,        # High-pass filter at 100Hz
-    mkfftseg_lp=8000.0,       # Low-pass filter at 8kHz
-    label="Machine Audio Analysis"
-)
-
-# Anomalous sound detection
-test_result = client.addplot_waveform(
-    files=["suspicious_sound.wav"]
-)
-```
+**Key Differences:**
+- `fit_transform()`: Returns `numpy.ndarray` (coordinate data only)
+- `basemap_*()`: Returns `dict` with structured metadata (`xyData`, `mapNo`, `shareUrl`)
+- **Both approaches**: Automatically update `client.mapNo` and `client.shareUrl` attributes
 
 ---
 

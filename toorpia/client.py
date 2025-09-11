@@ -100,7 +100,10 @@ class toorPIA:
                               # metadata
                               label=None, tag=None, description=None):
         """
-        Process WAV or CSV files directly to generate base map
+        DEPRECATED: Process WAV or CSV files directly to generate base map
+        
+        This method is deprecated. Use basemap_waveform() instead for a unified API
+        that returns structured metadata along with coordinate data.
         
         Args:
             files (list): List of WAV/CSV file paths
@@ -121,6 +124,12 @@ class toorPIA:
         Returns:
             numpy.ndarray: Coordinate data (each row is [x, y])
         """
+        import warnings
+        warnings.warn(
+            "fit_transform_waveform is deprecated. Use basemap_waveform() instead for unified API.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         # File existence and format check
         if not files or not isinstance(files, list):
             print("Error: files must be a non-empty list of file paths")
@@ -212,7 +221,10 @@ class toorPIA:
                             drop_columns=None, label=None, tag=None, description=None,
                             random_seed=42, identna_resolution=None, identna_effective_radius=None):
         """
-        Process CSV files directly to generate base map using form data upload
+        DEPRECATED: Process CSV files directly to generate base map using form data upload
+        
+        This method is deprecated. Use basemap_csv() instead for a unified API
+        that returns structured metadata along with coordinate data.
         
         Args:
             files (str or list): CSV file path or list of CSV file paths (required)
@@ -229,6 +241,12 @@ class toorPIA:
         Returns:
             numpy.ndarray: Coordinate data (each row is [x, y]) or None on failure
         """
+        import warnings
+        warnings.warn(
+            "fit_transform_csvform is deprecated. Use basemap_csv() instead for unified API.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         # File existence and format check (accept both string and list, same as waveform)
         if isinstance(files, str):
             files = [files]  # Convert single file to list
@@ -874,6 +892,255 @@ class toorPIA:
             return None
         except Exception as e:
             print(f"Error processing CSV addplot: {str(e)}")
+            return None
+        finally:
+            # Ensure file handles are closed
+            for _, file_handle in files_to_upload:
+                try:
+                    file_handle.close()
+                except:
+                    pass
+
+    @pre_authentication
+    def basemap_csv(self, files, weight_option_str=None, type_option_str=None,
+                    drop_columns=None, label=None, tag=None, description=None,
+                    random_seed=42, identna_resolution=None, identna_effective_radius=None):
+        """
+        Create base map from CSV files directly with unified return structure
+        
+        Args:
+            files (str or list): CSV file path or list of CSV file paths (required)
+            weight_option_str (str, optional): Weight options for columns (e.g., "1:1,2:0,3:1")
+            type_option_str (str, optional): Type options for columns (e.g., "1:float,2:none,3:int")
+            drop_columns (list, optional): List of column names to drop/exclude
+            label (str, optional): Map label
+            tag (str, optional): Map tag  
+            description (str, optional): Map description
+            random_seed (int, optional): Random seed for reproducibility (default: 42)
+            identna_resolution (int, optional): Mesh resolution (default: 100)
+            identna_effective_radius (float, optional): Effective radius ratio (default: 0.1)
+            
+        Returns:
+            dict: Dictionary containing:
+                - xyData: Coordinate data as NumPy array (each row is [x, y])
+                - mapNo: Map number
+                - shareUrl: Share URL for the map
+        """
+        # File existence and format check (accept both string and list)
+        if isinstance(files, str):
+            files = [files]  # Convert single file to list
+        
+        if not files or not isinstance(files, list):
+            print("Error: files must be a file path (string) or list of file paths")
+            return None
+        
+        files_to_upload = []
+        for file_path in files:
+            if not os.path.exists(file_path):
+                print(f"Error: File not found: {file_path}")
+                return None
+            
+            # File format check (.csv only)
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext != '.csv':
+                print(f"Error: Unsupported file format: {ext}. Only .csv files are supported.")
+                return None
+            
+            files_to_upload.append(('files', open(file_path, 'rb')))
+        
+        try:
+            # Prepare form data 
+            form_data = {
+                'label': label or '',
+                'tag': tag or '',
+                'description': description or ''
+            }
+            
+            if random_seed != 42:
+                form_data['randomSeed'] = str(random_seed)
+            
+            # Add weight and type options
+            if weight_option_str is not None:
+                form_data['weight_option_str'] = weight_option_str
+            if type_option_str is not None:
+                form_data['type_option_str'] = type_option_str
+            
+            # Add drop_columns if specified
+            if drop_columns is not None and isinstance(drop_columns, list):
+                form_data['drop_columns'] = json.dumps(drop_columns)
+            
+            # Add identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = float(identna_effective_radius)
+            if identna_params:
+                form_data['identna_params'] = json.dumps(identna_params)
+            
+            # Send as multipart/form-data to new basemap_csv endpoint
+            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
+            response = requests.post(
+                f"{API_URL}/data/basemap_csv",
+                files=files_to_upload,
+                data=form_data,
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                baseXyData = response_data['resdata']['baseXyData']
+                self.mapNo = response_data['resdata']['mapNo']
+                self.shareUrl = response_data.get('shareUrl')  # Save share URL
+                
+                np_array = np.array(baseXyData)  # Convert baseXyData to NumPy array
+                
+                # Return unified structure similar to addplot methods
+                return {
+                    'xyData': np_array,
+                    'mapNo': self.mapNo,
+                    'shareUrl': self.shareUrl
+                }
+            else:
+                try:
+                    error_message = response.json().get('message', 'Unknown error')
+                except:
+                    error_message = f"HTTP {response.status_code}: {response.text}"
+                print(f"CSV basemap creation failed. Server responded with error: {error_message}")
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error during CSV file upload: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"Error processing CSV basemap file: {str(e)}")
+            return None
+        finally:
+            # Ensure file handles are closed
+            for _, file_handle in files_to_upload:
+                try:
+                    file_handle.close()
+                except:
+                    pass
+
+    @pre_authentication
+    def basemap_waveform(self, files, 
+                        # mkfftSeg parameters
+                        mkfftseg_di=1, mkfftseg_hp=-1.0, mkfftseg_lp=-1.0, 
+                        mkfftseg_nm=0, mkfftseg_ol=50.0, mkfftseg_sr=48000,
+                        mkfftseg_wf="hanning", mkfftseg_wl=65536,
+                        # identna parameters
+                        identna_resolution=None, identna_effective_radius=None,
+                        # metadata
+                        label=None, tag=None, description=None):
+        """
+        Create base map from WAV or CSV files directly with unified return structure
+        
+        Args:
+            files (list): List of WAV/CSV file paths
+            mkfftseg_di (int): Data Index (starting from 1, for CSV files)
+            mkfftseg_hp (float): High pass filter (-1 to disable)
+            mkfftseg_lp (float): Low pass filter (-1 to disable)
+            mkfftseg_nm (int): nMovingAverage (0 for auto-setting)
+            mkfftseg_ol (float): Overlap ratio (%)
+            mkfftseg_sr (int): Sample rate (for CSV files)
+            mkfftseg_wf (str): Window function ("hanning" or "hamming")
+            mkfftseg_wl (int): Window length
+            identna_resolution (int): Mesh resolution (default: 100)
+            identna_effective_radius (float): Effective radius ratio (default: 0.1)
+            label (str): Map label
+            tag (str): Map tag
+            description (str): Map description
+            
+        Returns:
+            dict: Dictionary containing:
+                - xyData: Coordinate data as NumPy array (each row is [x, y])
+                - mapNo: Map number
+                - shareUrl: Share URL for the map
+        """
+        # File existence and format check
+        if not files or not isinstance(files, list):
+            print("Error: files must be a non-empty list of file paths")
+            return None
+        
+        files_to_upload = []
+        for file_path in files:
+            if not os.path.exists(file_path):
+                print(f"Error: File not found: {file_path}")
+                return None
+            
+            # File format check (.wav, .csv)
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext not in ['.wav', '.csv']:
+                print(f"Error: Unsupported file format: {ext}. Only .wav and .csv files are supported.")
+                return None
+            
+            files_to_upload.append(('files', open(file_path, 'rb')))
+        
+        try:
+            # Prepare mkfftSeg options in JSON format
+            mkfftseg_options = {
+                'di': int(mkfftseg_di),
+                'hp': float(mkfftseg_hp),
+                'lp': float(mkfftseg_lp),
+                'nm': int(mkfftseg_nm),
+                'ol': float(mkfftseg_ol),
+                'sr': int(mkfftseg_sr),
+                'wf': str(mkfftseg_wf),
+                'wl': int(mkfftseg_wl)
+            }
+            
+            # Prepare identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = float(identna_effective_radius)
+            
+            # Send as form-data to new basemap_waveform endpoint
+            form_data = {
+                'mkfftseg_options': json.dumps(mkfftseg_options),
+                'identna_options': json.dumps(identna_params) if identna_params else '{}',
+                'label': label or '',
+                'tag': tag or '',
+                'description': description or ''
+            }
+            
+            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
+            response = requests.post(
+                f"{API_URL}/data/basemap_waveform", 
+                files=files_to_upload,
+                data=form_data,
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                baseXyData = response_data['resdata']['baseXyData']
+                self.mapNo = response_data['resdata']['mapNo']
+                self.shareUrl = response_data.get('shareUrl')  # Save share URL
+                
+                np_array = np.array(baseXyData)  # Convert baseXyData to NumPy array
+                
+                # Return unified structure similar to addplot methods
+                return {
+                    'xyData': np_array,
+                    'mapNo': self.mapNo,
+                    'shareUrl': self.shareUrl
+                }
+            else:
+                try:
+                    error_message = response.json().get('message', 'Unknown error')
+                except:
+                    error_message = f"HTTP {response.status_code}: {response.text}"
+                print(f"Waveform basemap creation failed. Server responded with error: {error_message}")
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error during file upload: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"Error processing waveform basemap files: {str(e)}")
             return None
         finally:
             # Ensure file handles are closed
