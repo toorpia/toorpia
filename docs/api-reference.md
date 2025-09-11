@@ -5,9 +5,14 @@ This document provides detailed specifications for all methods and parameters of
 ## Table of Contents
 
 - [Client Initialization](#client-initialization)
-- [Basic Operations](#basic-operations)
-- [Data Format Specific Methods](#data-format-specific-methods)
-- [Add Plot Methods](#add-plot-methods)
+- [Core API Methods](#core-api-methods)
+  - [basemap_csv()](#basemap_csv) - CSV basemap creation
+  - [basemap_waveform()](#basemap_waveform) - Audio basemap creation  
+  - [addplot_csvform()](#addplot_csvform) - CSV anomaly detection
+  - [addplot_waveform()](#addplot_waveform) - Audio anomaly detection
+- [Alternative Methods](#alternative-methods)
+  - [fit_transform()](#fit_transform) - DataFrame-based processing
+  - [addplot()](#addplot) - DataFrame-based anomaly detection
 - [Map Management](#map-management)
 - [Parameter Details](#parameter-details)
 - [Return Values](#return-values)
@@ -36,51 +41,231 @@ client = toorPIA(api_key="your-api-key")
 
 ---
 
-## Basic Operations
+## Core API Methods
 
-### fit_transform()
+toorPIA's primary workflow consists of creating base maps and adding new data for anomaly detection. These methods provide consistent return structures and comprehensive metadata support.
 
-Creates a base map from pandas DataFrame or numpy array data.
+### basemap_csv()
 
-```python
-import pandas as pd
-
-df = pd.read_csv("input.csv")
-
-# Basic usage
-result = client.fit_transform(df)
-
-# Extended usage with metadata
-result = client.fit_transform(
-    data=df,
-    label="Production Line 1 - Pressure Gauge",  # Optional: Name to identify the target equipment
-    tag="Pressure Sensor",  # Optional: Classification category for the map
-    description="Pressure gauge used in the 3rd process of Production Line 1. Model: ABC-123",  # Optional: Detailed description
-    random_seed=123  # Optional: Random seed for clustering (default: 42)
-)
-
-print(client.shareUrl)  # Get the share URL for the created map
-```
-
-#### Advanced: Custom identna Parameters
-
-You can customize the normal area identification (identna) parameters when creating a base map:
+Creates a base map from CSV files, establishing normal data patterns for anomaly detection.
 
 ```python
-result = client.fit_transform(
-    data=df,
-    identna_resolution=50,        # Mesh resolution (default: 100)
-    identna_effective_radius=0.15 # Effective radius ratio (default: 0.1)
+# Basic usage with automatic column handling
+result = client.basemap_csv(
+    "production_data.csv",
+    drop_columns=["ID", "Timestamp"],  # Exclude identifier columns
+    label="Production Line Quality Data",
+    tag="Manufacturing",
+    identna_resolution=200
 )
+
+# Manual column control for fine-tuned analysis  
+result = client.basemap_csv(
+    "sensor_data.csv",
+    weight_option_str="1:0,2:0,3:1,4:1,5:1,6:1",  # Column weights (1-based)
+    type_option_str="1:int,2:none,3:float,4:float,5:float,6:float",  # Column types
+    label="Sensor Baseline Analysis",
+    tag="Quality Control",
+    identna_resolution=150
+)
+
+# Multiple file processing
+csv_files = ["baseline1.csv", "baseline2.csv", "baseline3.csv"]
+result = client.basemap_csv(
+    csv_files,
+    drop_columns=["ID", "Name", "Comments"],
+    label="Combined Baseline Data",
+    identna_effective_radius=0.15
+)
+
+# Access results with unified structure
+print(f"✅ Base map created!")
+print(f"Map Number: {result['mapNo']}")
+print(f"Coordinates shape: {result['xyData'].shape}")
+print(f"🌐 View online: {result['shareUrl']}")
+
+# Client attributes automatically updated
+print(f"Current map: {client.mapNo}")
+print(f"Share URL: {client.shareUrl}")
 ```
 
-**identna Parameters:**
-- `identna_resolution`: Mesh resolution for normal area identification. Higher values provide finer granularity but require more computation.
-- `identna_effective_radius`: Effective radius as a ratio to the mesh area side length. Controls the influence radius around each data point.
+**Parameters:**
+- `files` (str or list): CSV file path(s) to process
+- `drop_columns` (list): Column names to exclude (recommended for simple usage)
+- `weight_option_str` (str): Manual column weight specification (1-based indexing)
+- `type_option_str` (str): Manual column type specification  
+- `label`, `tag`, `description` (str): Metadata for map identification
+- `random_seed` (int): Reproducibility seed (default: 42)
+- `identna_resolution` (int): Analysis mesh resolution (default: 100)
+- `identna_effective_radius` (float): Analysis radius ratio (default: 0.1)
+
+**Note:** `drop_columns` takes precedence over `weight_option_str`/`type_option_str`.
+
+**Returns:** Dictionary with `xyData`, `mapNo`, and `shareUrl`
+
+### basemap_waveform()
+
+Creates a base map from audio/waveform files using FFT-based feature extraction for acoustic pattern analysis.
+
+```python
+# Basic usage with multiple audio files
+result = client.basemap_waveform(
+    ["normal_sound1.wav", "normal_sound2.wav", "normal_sound3.wav"],
+    mkfftseg_hp=500.0,       # High-pass filter at 500Hz
+    mkfftseg_lp=8000.0,      # Low-pass filter at 8kHz
+    mkfftseg_wl=4096,        # FFT window length
+    mkfftseg_wf="hamming",   # Window function
+    label="Machine Audio Baseline",
+    tag="Acoustic Monitoring",
+    identna_resolution=150
+)
+
+# Advanced parameter customization
+result = client.basemap_waveform(
+    ["machine_audio.wav"],
+    mkfftseg_hp=100.0,       # High-pass filter
+    mkfftseg_lp=10000.0,     # Low-pass filter  
+    mkfftseg_wl=8192,        # Larger window for better frequency resolution
+    mkfftseg_ol=75.0,        # 75% overlap
+    mkfftseg_wf="hanning",   # Hanning window
+    identna_resolution=200,  # High-resolution analysis
+    label="Precision Audio Analysis",
+    description="High-resolution acoustic signature analysis"
+)
+
+# Mixed file processing (WAV + CSV)
+mixed_files = ["audio_data.wav", "vibration_data.csv"]
+result = client.basemap_waveform(
+    mixed_files,
+    mkfftseg_sr=44100,       # Sample rate for CSV files
+    mkfftseg_di=2,           # Use 2nd column of CSV as signal data
+    label="Multi-modal Baseline"
+)
+
+# Access results
+print(f"✅ Audio base map created!")  
+print(f"Map Number: {result['mapNo']}")
+print(f"Spectral coordinates shape: {result['xyData'].shape}")
+print(f"🌐 View spectral map: {result['shareUrl']}")
+
+# Client attributes automatically updated
+print(f"Current map: {client.mapNo}")
+print(f"Share URL: {client.shareUrl}")
+```
+
+**Audio Processing Parameters:**
+- `mkfftseg_di` (int): Data column index for CSV files (1-based, default: 1)
+- `mkfftseg_hp` (float): High-pass filter frequency (-1 to disable, default: -1.0)
+- `mkfftseg_lp` (float): Low-pass filter frequency (-1 to disable, default: -1.0)
+- `mkfftseg_wl` (int): FFT window length (default: 65536)
+- `mkfftseg_wf` (str): Window function "hanning" or "hamming" (default: "hanning")
+- `mkfftseg_ol` (float): Overlap percentage (default: 50.0)
+- `mkfftseg_sr` (int): Sample rate for CSV files (default: 48000)
+
+**Returns:** Dictionary with `xyData`, `mapNo`, and `shareUrl`
+
+### addplot_csvform()
+
+Tests new CSV data against an existing CSV-based map for anomaly detection. Automatically inherits processing parameters from the base map.
+
+```python
+# Test against the most recent base map
+result = client.addplot_csvform("new_production_data.csv")
+
+# Test against a specific base map
+result = client.addplot_csvform("test_data.csv", mapNo=123)
+
+# Process multiple test files
+test_files = ["batch1.csv", "batch2.csv", "batch3.csv"]  
+result = client.addplot_csvform(test_files)
+
+# Advanced anomaly detection parameters
+result = client.addplot_csvform(
+    "suspicious_data.csv",
+    detabn_max_window=5,         # Anomaly detection window
+    detabn_rate_threshold=0.8,   # Anomaly rate threshold
+    detabn_threshold=0.1,        # Normal area threshold
+    detabn_print_score=True      # Include detailed scores
+)
+
+# Analyze results
+print(f"📊 Anomaly Detection Results:")
+print(f"Status: {result['abnormalityStatus']}")  # 'normal', 'abnormal', 'unknown'
+print(f"Score: {result['abnormalityScore']:.3f}")
+print(f"Data points analyzed: {result['xyData'].shape[0]}")
+
+if result['abnormalityStatus'] == 'abnormal':
+    print(f"🚨 Anomaly detected! Score: {result['abnormalityScore']:.3f}")
+    print(f"🌐 Investigate at: {result['shareUrl']}")
+else:
+    print(f"✅ Data appears normal")
+
+print(f"Addplot #{result['addPlotNo']} completed")
+```
+
+**Key Features:**
+- **Automatic consistency**: Inherits base map's CSV processing parameters
+- **No manual configuration**: Column weights and types automatically applied
+- **Flexible map targeting**: Test against recent or specific maps
+
+**Returns:** Dictionary with anomaly detection results and coordinate data
+
+### addplot_waveform()
+
+Tests new audio/waveform data against an existing waveform-based map for acoustic anomaly detection. Automatically uses the same audio processing parameters as the base map.
+
+```python
+# Test suspicious audio against the most recent base map
+result = client.addplot_waveform(["suspicious_sound.wav"])
+
+# Test against a specific acoustic baseline  
+result = client.addplot_waveform(["machine_noise.wav"], mapNo=456)
+
+# Process multiple test recordings
+test_recordings = ["sample1.wav", "sample2.wav", "sample3.wav"]
+result = client.addplot_waveform(test_recordings)
+
+# Advanced acoustic anomaly detection
+result = client.addplot_waveform(
+    ["industrial_audio.wav"],
+    detabn_max_window=3,         # Acoustic window analysis
+    detabn_rate_threshold=0.7,   # Anomaly sensitivity
+    detabn_threshold=0.05,       # Acoustic normal threshold
+    detabn_print_score=True      # Detailed acoustic scores
+)
+
+# Analyze acoustic anomaly results
+print(f"🔊 Acoustic Anomaly Analysis:")
+print(f"Status: {result['abnormalityStatus']}")
+print(f"Acoustic Score: {result['abnormalityScore']:.3f}")  
+print(f"Spectral data points: {result['xyData'].shape[0]}")
+
+if result['abnormalityStatus'] == 'abnormal':
+    print(f"🚨 Acoustic anomaly detected!")
+    print(f"Deviation score: {result['abnormalityScore']:.3f}")
+    print(f"🌐 Listen and analyze: {result['shareUrl']}")
+else:
+    print(f"✅ Audio pattern matches baseline")
+
+print(f"Acoustic analysis #{result['addPlotNo']} completed")
+```
+
+**Key Features:**
+- **Parameter inheritance**: Uses base map's FFT and filtering settings
+- **Acoustic consistency**: Ensures identical preprocessing for accurate comparison
+- **Multi-format support**: Handles WAV files and CSV time-series data
+
+**Returns:** Dictionary with acoustic anomaly detection results
 
 ---
 
-## Data Format Specific Methods
+## Alternative Methods
+
+The following methods provide alternative approaches for specific use cases.
+
+### fit_transform()
+
+Creates a base map from pandas DataFrame or numpy array data. Similar to scikit-learn's PCA or t-SNE, this method processes data already loaded in memory.
 
 ### fit_transform_csvform()
 
@@ -524,6 +709,8 @@ toorPIA enforces strict compatibility between base map creation methods and addp
 
 | Base Map Method | addplot() | addplot_csvform() | addplot_waveform() |
 |---|:---:|:---:|:---:|
+| **basemap_csv()** | ❌ | ✅ | ❌ |
+| **basemap_waveform()** | ❌ | ❌ | ✅ |
 | **fit_transform()** | ✅ | ❌ | ❌ |
 | **fit_transform_csvform()** | ❌ | ✅ | ❌ |
 | **fit_transform_waveform()** | ❌ | ❌ | ✅ |
