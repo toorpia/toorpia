@@ -6,7 +6,7 @@ This document provides detailed specifications for all methods and parameters of
 
 - [Client Initialization](#client-initialization)
 - [Core API Methods](#core-api-methods)
-  - [basemap_csv()](#basemap_csv) - CSV basemap creation
+  - [basemap_csvform()](#basemap_csvform) - CSV basemap creation
   - [basemap_waveform()](#basemap_waveform) - Audio basemap creation  
   - [addplot_csvform()](#addplot_csvform) - CSV anomaly detection
   - [addplot_waveform()](#addplot_waveform) - Audio anomaly detection
@@ -45,13 +45,13 @@ client = toorPIA(api_key="your-api-key")
 
 toorPIA's primary workflow consists of creating base maps and adding new data for anomaly detection. These methods provide consistent return structures and comprehensive metadata support.
 
-### basemap_csv()
+### basemap_csvform()
 
 Creates a base map from CSV files, establishing normal data patterns for anomaly detection.
 
 ```python
 # Basic usage with automatic column handling
-result = client.basemap_csv(
+result = client.basemap_csvform(
     "production_data.csv",
     drop_columns=["ID", "Timestamp"],  # Exclude identifier columns
     label="Production Line Quality Data",
@@ -60,7 +60,7 @@ result = client.basemap_csv(
 )
 
 # Manual column control for fine-tuned analysis  
-result = client.basemap_csv(
+result = client.basemap_csvform(
     "sensor_data.csv",
     weight_option_str="1:0,2:0,3:1,4:1,5:1,6:1",  # Column weights (1-based)
     type_option_str="1:int,2:none,3:float,4:float,5:float,6:float",  # Column types
@@ -71,7 +71,7 @@ result = client.basemap_csv(
 
 # Multiple file processing
 csv_files = ["baseline1.csv", "baseline2.csv", "baseline3.csv"]
-result = client.basemap_csv(
+result = client.basemap_csvform(
     csv_files,
     drop_columns=["ID", "Name", "Comments"],
     label="Combined Baseline Data",
@@ -709,7 +709,7 @@ toorPIA enforces strict compatibility between base map creation methods and addp
 
 | Base Map Method | addplot() | addplot_csvform() | addplot_waveform() |
 |---|:---:|:---:|:---:|
-| **basemap_csv()** | ❌ | ✅ | ❌ |
+| **basemap_csvform()** | ❌ | ✅ | ❌ |
 | **basemap_waveform()** | ❌ | ❌ | ✅ |
 | **fit_transform()** | ✅ | ❌ | ❌ |
 | **fit_transform_csvform()** | ❌ | ✅ | ❌ |

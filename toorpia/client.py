@@ -223,7 +223,7 @@ class toorPIA:
         """
         DEPRECATED: Process CSV files directly to generate base map using form data upload
         
-        This method is deprecated. Use basemap_csv() instead for a unified API
+        This method is deprecated. Use basemap_csvform() instead for a unified API
         that returns structured metadata along with coordinate data.
         
         Args:
@@ -243,7 +243,7 @@ class toorPIA:
         """
         import warnings
         warnings.warn(
-            "fit_transform_csvform is deprecated. Use basemap_csv() instead for unified API.",
+            "fit_transform_csvform is deprecated. Use basemap_csvform() instead for unified API.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -797,7 +797,7 @@ class toorPIA:
         # Determine target map number
         target_mapNo = mapNo if mapNo is not None else self.mapNo
         if target_mapNo is None:
-            print("Error: Map number is not specified. Please provide mapNo or use fit_transform_csvform() first.")
+            print("Error: Map number is not specified. Please provide mapNo or use basemap_csvform() first.")
             return None
         
         # File existence and format check (accept both string and list, same as csvform)
@@ -902,7 +902,7 @@ class toorPIA:
                     pass
 
     @pre_authentication
-    def basemap_csv(self, files, weight_option_str=None, type_option_str=None,
+    def basemap_csvform(self, files, weight_option_str=None, type_option_str=None,
                     drop_columns=None, label=None, tag=None, description=None,
                     random_seed=42, identna_resolution=None, identna_effective_radius=None):
         """
@@ -978,10 +978,10 @@ class toorPIA:
             if identna_params:
                 form_data['identna_params'] = json.dumps(identna_params)
             
-            # Send as multipart/form-data to new basemap_csv endpoint
+            # Send as multipart/form-data to new basemap_csvform endpoint
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
             response = requests.post(
-                f"{API_URL}/data/basemap_csv",
+                f"{API_URL}/data/basemap_csvform",
                 files=files_to_upload,
                 data=form_data,
                 headers=headers

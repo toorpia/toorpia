@@ -9,8 +9,8 @@ print(f"File exists: {os.path.exists(csv_path)}")
 
 client = toorPIA()
 
-# Using the new unified API (basemap_csv)
-result = client.basemap_csv(
+# Using the new unified API (basemap_csvform)
+result = client.basemap_csvform(
     csv_path,
 #    drop_columns=["No", "ID", "Diagnosis"],
     weight_option_str="1:0,2:0,3:1,4:1,5:1,6:1,7:1,8:1,9:1,10:1,11:1,12:0",

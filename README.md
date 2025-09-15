@@ -65,7 +65,7 @@ from toorpia import toorPIA
 client = toorPIA()
 
 # Create base map from CSV file
-result = client.basemap_csv(
+result = client.basemap_csvform(
     "samples/biopsy.csv",
     weight_option_str="1:0,2:0,3:1,4:1,5:1,6:1,7:1,8:1,9:1,10:1,11:1,12:0",
     type_option_str="1:int,2:none,3:float,4:float,5:float,6:float,7:float,8:float,9:float,10:float,11:float,12:enum",
@@ -160,10 +160,10 @@ All basemap and addplot operations generate interactive visualizations accessibl
 
 All `basemap_*()` and `addplot_*()` methods return consistent dictionary structures:
 
-#### `basemap_csv()` and `basemap_waveform()` Return Values
+#### `basemap_csvform()` and `basemap_waveform()` Return Values
 
 ```python
-result = client.basemap_csv("data.csv")
+result = client.basemap_csvform("data.csv")
 # or
 result = client.basemap_waveform(["audio1.wav", "audio2.wav"])
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Example: Using the new basemap_csv API for creating base maps from CSV files
+Example: Using the new basemap_csvform API for creating base maps from CSV files
 
 This example demonstrates the unified API that returns structured data including
 coordinate data, map numbers, and share URLs.
@@ -19,7 +19,7 @@ def main():
     
     # Create base map using the new unified API
     print("\n=== Creating Base Map ===")
-    result = client.basemap_csv(
+    result = client.basemap_csvform(
         csv_path,
         # Optional: drop columns that are not needed for analysis
         # drop_columns=["No", "ID", "Diagnosis"],
