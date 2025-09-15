@@ -9,18 +9,18 @@ print(f"File exists: {os.path.exists(csv_path)}")
 
 client = toorPIA()
 
-# First, create a base map using fit_transform_csvform
+# First, create a base map using basemap_csvform
 print("=== Creating base map ===")
-base_result = client.fit_transform_csvform(
+base_result = client.basemap_csvform(
     csv_path,
     weight_option_str="1:0,2:0,3:1,4:1,5:1,6:1,7:1,8:1,9:1,10:1,11:1,12:0",
     type_option_str="1:int,2:none,3:float,4:float,5:float,6:float,7:float,8:float,9:float,10:float,11:float,12:enum",
     identna_resolution=200,
     identna_effective_radius=0.2
 )
-print(f"Base result: {base_result}")
-print(f"Map No: {client.mapNo}")
-print(f"Share URL: {client.shareUrl}")
+print(f"Base result shape: {base_result['xyData'].shape if base_result else 'Failed'}")
+print(f"Map No: {base_result['mapNo'] if base_result else 'N/A'}")
+print(f"Share URL: {base_result['shareUrl'] if base_result else 'N/A'}")
 
 # Now, add a plot using the same CSV file (this will use stored CSV options)
 print("\n=== Adding plot (inherits basemap identna) ===")
