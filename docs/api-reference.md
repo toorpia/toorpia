@@ -575,24 +575,55 @@ The returned map data includes the following metadata in addition to the basic i
 
 ### export_map()
 
-Exports a map to a specified directory.
+Exports a map to a specified directory, including all base map files and the `input/` subdirectory if present.
 
 ```python
 map_no = client.mapNo  # Or any valid map number
 client.export_map(map_no, "/path/to/export/directory")
 ```
 
-**Important Note**: The export operation only includes base map files. Add plot files are excluded from the export. If your map includes add plots, you'll need to recreate them after importing the map.
+**Exported Files:**
+
+The export includes:
+- **Required files**: `segments.csv`, `xy.dat`
+- **Status files**: `status.mi`, `status-02.mi`, `status-03.mi`, ... (if multiple status saves exist from Map Inspector)
+- **Optional files**: `normal_area.dat`, clustering files (`seed-segments.csv`, `seed-xy.dat`)
+- **Input data**: `input/` subdirectory (for csvform/waveform maps containing original raw data)
+
+**Excluded Files:**
+- Add plot files (`segments-add-*.csv`, `xy-add-*.dat`, `rawdata_add_*.csv`, `normalarea-add-*.dat`)
+- Add plot input directories (`input_add_*/`)
+- Temporary files (`chunks/`)
+- Log files (`*.log`)
+
+**Important Notes**:
+- The export operation only includes base map files. Add plot files are excluded.
+- If your map includes add plots, you'll need to recreate them after importing the map.
+- The `input/` directory containing original data (for csvform/waveform maps) is preserved in the export.
 
 ### import_map()
 
-Imports a map from a specified directory.
+Imports a map from a specified directory, restoring the complete base map structure including subdirectories.
 
 ```python
 new_map_no = client.import_map("/path/to/import/directory")
 ```
 
-**Important Note**: The import operation only processes base map files. Any add plot files in the directory will be ignored. After importing a map, you must recreate any add plots using the `addplot` method.
+**Required Files:**
+- `segments.csv`: Segment file (required)
+- `xy.dat`: Coordinate data file (required)
+
+**Optional Files:**
+- `status.mi`, `status-02.mi`, ... : Status files
+- `normal_area.dat`: Normal area file
+- `input/` directory: Original input data (for csvform/waveform maps)
+- Clustering files: `seed-segments.csv` and `seed-xy.dat` (must both be present if clustering map)
+
+**Important Notes**:
+- The import operation only processes base map files. Any add plot files will be ignored.
+- Directory structure (like `input/`) is automatically restored during import.
+- After importing a map, you must recreate any add plots using the `addplot` method.
+- For clustering maps, both `seed-segments.csv` and `seed-xy.dat` must be present together.
 
 **Function Aliases:**
 - `import_map` can also be called as `upload_map`

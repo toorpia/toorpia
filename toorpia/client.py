@@ -629,18 +629,25 @@ class toorPIA:
     def export_map(self, map_no, export_dir):
         """
         指定されたマップをエクスポート（ダウンロード）し、指定されたディレクトリに保存する
-        
-        注意: このメソッドはベースマップファイルのみをエクスポートします。
-        追加プロットファイル (segments-add-*.csv, xy-add-*.dat, rawdata_add_*.csv) や
-        ログファイル (*.log) は除外されます。クラスタリング解析で生成された
-        全てのファイルはベースマップの一部として含まれます。
-        
-        エクスポートされたマップをインポートした後、追加プロットは再作成する必要があります。
-        
+
+        エクスポートされるファイル:
+        - 必須ファイル: segments.csv, xy.dat
+        - ステータスファイル: status.mi, status-02.mi, status-03.mi, ...
+        - オプションファイル: normal_area.dat, seed-segments.csv, seed-xy.dat
+        - input/ディレクトリ: csvform/waveform形式の元データ（存在する場合）
+
+        除外されるファイル:
+        - 追加プロットファイル (segments-add-*.csv, xy-add-*.dat, rawdata_add_*.csv, normalarea-add-*.dat)
+        - 追加プロット用入力ディレクトリ (input_add_*/)
+        - 一時ファイルディレクトリ (chunks/)
+        - ログファイル (*.log)
+
+        注意: エクスポートされたマップをインポートした後、追加プロットは再作成する必要があります。
+
         Args:
             map_no: エクスポートするマップ番号
             export_dir: エクスポートしたファイルを保存するディレクトリ
-            
+
         Returns:
             エクスポートされたマップデータを含む辞書またはエクスポートに失敗した場合はNone
         """
@@ -656,10 +663,19 @@ class toorPIA:
             os.makedirs(export_dir, exist_ok=True)
             
             # map_dataに含まれる全てのファイルを展開して保存
+            # ファイル名に__が含まれる場合はディレクトリ構造を復元
             for filename, file_content_b64 in map_data.items():
                 try:
+                    # __をディレクトリ区切り文字に戻す
+                    original_path = filename.replace('__', os.sep)
+                    file_path = os.path.join(export_dir, original_path)
+
+                    # サブディレクトリが必要な場合は作成
+                    file_dir = os.path.dirname(file_path)
+                    if file_dir:
+                        os.makedirs(file_dir, exist_ok=True)
+
                     file_content = base64.b64decode(file_content_b64).decode('utf-8')
-                    file_path = os.path.join(export_dir, filename)
                     with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(file_content)
                         f.flush()  # バッファをフラッシュ
@@ -683,18 +699,30 @@ class toorPIA:
     def import_map(self, input_dir):
         """
         指定されたディレクトリからマップデータを読み込み、インポート（アップロード）する
-        
-        注意: このメソッドはベースマップファイルのみをインポートします。
-        追加プロットファイル (segments-add-*.csv, xy-add-*.dat, rawdata_add_*.csv) や
-        ログファイル (*.log) は除外されます。クラスタリング解析で生成された
-        全てのファイルはベースマップの一部として含まれます。
-        
-        ディレクトリに追加プロットファイルが含まれていても、それらはインポートされず、
-        インポート後にaddplotメソッドを使用して再作成する必要があります。
-        
+
+        必須ファイル:
+        - segments.csv: セグメントファイル（必須）
+        - xy.dat: 座標データファイル（必須）
+
+        オプションファイル:
+        - status.mi, status-02.mi, ... : ステータスファイル
+        - normal_area.dat: 正常領域ファイル
+        - input/ディレクトリ: csvform/waveform形式の元データ
+        - seed-segments.csv, seed-xy.dat: クラスタリングファイル（両方必須）
+
+        除外されるファイル:
+        - 追加プロットファイル (segments-add-*.csv, xy-add-*.dat, rawdata_add_*.csv, normalarea-add-*.dat)
+        - ログファイル (*.log)
+
+        注意:
+        - ディレクトリに追加プロットファイルが含まれていても、それらはインポートされません
+        - インポート後にaddplotメソッドを使用して追加プロットを再作成する必要があります
+        - input/などのサブディレクトリがある場合、ディレクトリ構造も自動的にアップロードされます
+        - クラスタリングマップの場合、seed-segments.csvとseed-xy.datの両方が必要です
+
         Args:
             input_dir: インポートするマップファイルが含まれているディレクトリ
-            
+
         Returns:
             インポートされた新しいマップ番号、または既存のマップが見つかった場合はその番号
             インポートに失敗した場合はNone
@@ -1309,38 +1337,56 @@ class toorPIA:
 
     def _read_map_data_from_directory(self, directory):
         """
-        指定されたディレクトリからマップデータを読み込む
-        
+        指定されたディレクトリからマップデータを再帰的に読み込む
+
         注意: このメソッドはベースマップファイルのみを読み込みます。
         追加プロットファイル (segments-add-*.csv, xy-add-*.dat, rawdata_add_*.csv) や
         ログファイル (*.log) は除外されます。クラスタリング解析で生成された
         全てのファイルはベースマップの一部として含まれます。
+
+        input/サブディレクトリがある場合も再帰的に読み込まれ、
+        ファイル名はinput__filename.csvのように__区切りでエンコードされます。
         """
         map_data = {}
-        for filename in os.listdir(directory):
-            # 追加プロットファイルとログファイルを除外
-            if (not filename.startswith('segments-add-') and
-                not filename.startswith('xy-add-') and 
-                not filename.startswith('rawdata_add_') and
-                not filename.endswith('.log')):
-                
-                file_path = os.path.join(directory, filename)
-                if os.path.isfile(file_path):
-                    with open(file_path, 'rb') as f:
+        add_plot_count = 0
+
+        def read_directory_recursive(current_dir, relative_path=''):
+            nonlocal add_plot_count
+
+            for item in os.listdir(current_dir):
+                item_path = os.path.join(current_dir, item)
+                rel_path = os.path.join(relative_path, item) if relative_path else item
+
+                if os.path.isdir(item_path):
+                    # input/ディレクトリのみ再帰的に処理、他のディレクトリは除外
+                    # chunks/, input_add_*/ などは除外
+                    if rel_path == 'input':
+                        read_directory_recursive(item_path, rel_path)
+                    elif rel_path.startswith('input_add_') or rel_path == 'chunks':
+                        continue  # これらのディレクトリはスキップ
+                elif os.path.isfile(item_path):
+                    # 追加プロットファイルとログファイルを除外
+                    if (item.startswith('segments-add-') or
+                        item.startswith('xy-add-') or
+                        item.startswith('rawdata_add_') or
+                        item.startswith('normalarea-add-') or
+                        item.endswith('.log')):
+                        add_plot_count += 1
+                        continue
+
+                    with open(item_path, 'rb') as f:
                         file_content = f.read()
-                        map_data[filename] = base64.b64encode(file_content).decode('utf-8')
-        
+                        # パス区切り文字を__に変換してエンコード
+                        file_key = rel_path.replace(os.sep, '__')
+                        map_data[file_key] = base64.b64encode(file_content).decode('utf-8')
+
+        read_directory_recursive(directory)
+
         # ディレクトリ内に追加プロットファイルが存在する場合警告を表示
-        all_files = os.listdir(directory)
-        add_plot_files = [f for f in all_files if 
-                           f.startswith('segments-add-') or 
-                           f.startswith('xy-add-') or 
-                           f.startswith('rawdata_add_')]
-        
-        if add_plot_files:
-            print(f"Warning: {len(add_plot_files)} add plot related files were found but not included in the import/export.")
+        if add_plot_count > 0:
+            print(f"Warning: {add_plot_count} add plot related files were found but not included in the import/export.")
             print("Add plots must be recreated after importing the map.")
-            
+
         return map_data
 
     def _generate_type_weight_options(self, df):
