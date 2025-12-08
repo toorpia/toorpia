@@ -794,12 +794,6 @@ except Exception as e:
 
 ## Advanced Features
 
-### Checksum Calculation and Comparison
-
-The client automatically calculates checksums for map data during import and export operations. This ensures data integrity and prevents unnecessary uploads of duplicate data.
-
-**Note about checksums**: The checksum calculation now excludes add plot files and log files. Only base map files are considered when computing checksums. This ensures consistent checksums for the same base map, regardless of any add plot operations performed.
-
 ### Flexible Map Selection in addplot
 
 The `addplot` method now supports flexible arguments:

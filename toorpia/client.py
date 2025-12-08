@@ -724,18 +724,9 @@ class toorPIA:
             input_dir: インポートするマップファイルが含まれているディレクトリ
 
         Returns:
-            インポートされた新しいマップ番号、または既存のマップが見つかった場合はその番号
+            インポートされた新しいマップ番号
             インポートに失敗した場合はNone
         """
-        # チェックサムの計算
-        checksum = self.calculate_checksum(input_dir)
-        
-        # サーバーとチェックサムを比較
-        existing_map_no = self.compare_checksum(checksum)
-        if existing_map_no is not None:
-            print(f"A matching map was found. No new upload is necessary. Map No: {existing_map_no}")
-            return existing_map_no
-
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
         
         map_data = self._read_map_data_from_directory(input_dir)
@@ -1444,58 +1435,3 @@ class toorPIA:
         
         return weight_option_str, type_option_str
 
-    def calculate_checksum(self, map_dir):
-        """
-        マップデータのチェックサムを計算する
-        
-        注意: このメソッドはベースマップファイルのみを対象とします。
-        追加プロットファイル (segments-add-*.csv, xy-add-*.dat, rawdata_add_*.csv) や
-        ログファイル (*.log) は除外されます。クラスタリング解析で生成された
-        全てのファイルはベースマップの一部として含まれます。
-        """
-        md5 = hashlib.md5()
-
-        # map_dir以下の全ファイルを取得
-        files = glob.glob(os.path.join(map_dir, '**/*'), recursive=True)
-
-        # ファイルパスでソートして順序を一定に保つ
-        sorted_files = sorted(files)
-
-        # 追加プロット関連ファイルとログファイルを除外
-        for file_path in sorted_files:
-            if os.path.isfile(file_path):
-                filename = os.path.basename(file_path)
-                # 追加プロットファイルとログファイルをスキップ
-                if (not filename.startswith('segments-add-') and
-                    not filename.startswith('xy-add-') and 
-                    not filename.startswith('rawdata_add_') and
-                    not filename.endswith('.log')):
-                    with open(file_path, 'rb') as f:
-                        file_content = f.read()
-                        md5.update(file_content)
-
-        return md5.hexdigest()
-
-    @pre_authentication
-    def compare_checksum(self, checksum):
-        """サーバーとチェックサムを比較する"""
-        headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
-        data = {'checksum': checksum}
-
-        response = requests.post(f"{API_URL}/maps/compare-checksum", headers=headers, json=data)
-        
-        if response.status_code == 200:
-            try:
-                result = response.json()
-                if result['mapNo'] is not None:
-                    self.shareUrl = result.get('shareUrl')  # シェアURLを保存
-                    return result['mapNo']
-                else:
-                    return None
-            except json.JSONDecodeError:
-                print(f"Failed to parse server response as JSON. Response content: {response.text}")
-                return None
-        else:
-            print(f"Checksum comparison failed. Status code: {response.status_code}")
-            print(f"Response content: {response.text}")
-            return None
