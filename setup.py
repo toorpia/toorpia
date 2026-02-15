@@ -2,13 +2,13 @@ from setuptools import setup, find_packages
 
 setup(
     name='toorpia',
-    version='0.4.0',
+    version='1.1.1',
     author='toor Inc.',
     author_email='takaeda@toor.jpn.com',
-    description='A client library for accessing the toorPIA high-dimensional data analysis API',
+    description='API Frontend libraries of toorpia',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    url='https://github.com/toorpia/api.git',
+    url='https://github.com/toorpia/toorpia.git',
     packages=find_packages(),
     install_requires=[
         'pandas>=1.0.0',
