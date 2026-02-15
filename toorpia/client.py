@@ -1413,8 +1413,21 @@ class toorPIA:
                 weight_options.append(f"{col_idx}:1")     # int型の重みは1
             
             elif pd.api.types.is_string_dtype(col_type) or pd.api.types.is_object_dtype(col_type):
-                type_options.append(f"{col_idx}:none")    # 文字列型用の設定
-                weight_options.append(f"{col_idx}:0")     # 文字列型の重みは0
+                # 文字列がdate-likeかどうかをチェック
+                sample = df[col_name].dropna()
+                is_date = False
+                if len(sample) > 0:
+                    try:
+                        pd.to_datetime(sample.head(10), format='mixed')
+                        is_date = True
+                    except (ValueError, TypeError):
+                        pass
+                if is_date:
+                    type_options.append(f"{col_idx}:date")    # 日付文字列型用の設定
+                    weight_options.append(f"{col_idx}:0")     # 日付文字列型の重みは0
+                else:
+                    type_options.append(f"{col_idx}:none")    # 文字列型用の設定
+                    weight_options.append(f"{col_idx}:0")     # 文字列型の重みは0
             
             elif pd.api.types.is_categorical_dtype(col_type):
                 type_options.append(f"{col_idx}:enum")    # カテゴリ型用の設定
