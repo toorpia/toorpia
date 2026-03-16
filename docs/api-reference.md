@@ -208,7 +208,7 @@ print(f"Addplot #{result['addPlotNo']} completed")
 - **No manual configuration**: Column weights and types automatically applied
 - **Flexible map targeting**: Test against recent or specific maps
 
-**Returns:** Dictionary with anomaly detection results and coordinate data
+**Returns:** Dictionary with anomaly detection results, coordinate data, and composite diagnostic score
 
 ### addplot_waveform()
 
@@ -255,7 +255,7 @@ print(f"Acoustic analysis #{result['addPlotNo']} completed")
 - **Acoustic consistency**: Ensures identical preprocessing for accurate comparison
 - **Multi-format support**: Handles WAV files and CSV time-series data
 
-**Returns:** Dictionary with acoustic anomaly detection results
+**Returns:** Dictionary with acoustic anomaly detection results and composite diagnostic score
 
 ---
 
@@ -453,12 +453,30 @@ print(f"XY Data: {result['xyData'].shape}")                  # NumPy array of co
 - `detabn_print_score`: Whether to include detailed score information in the analysis
 
 **Return Value Enhancement:**
-The `addplot` method now returns a dictionary containing:
+The `addplot` method returns a dictionary containing:
 - `xyData`: NumPy array of coordinate data
 - `addPlotNo`: Sequential number of the add plot
-- `abnormalityStatus`: 'normal', 'abnormal', or 'unknown'
-- `abnormalityScore`: Numerical abnormality score
+- `abnormalityStatus`: 'normal', 'abnormal', or 'unknown' (backward-compatible)
+- `abnormalityScore`: detabn mesh density score (backward-compatible)
+- `diagnosticScore`: Composite diagnostic score combining detabn and distance analysis (see [Return Values](#return-values))
 - `shareUrl`: Share URL for the updated map
+
+**Composite Diagnostic Score:**
+
+The `diagnosticScore` field provides a three-level severity assessment:
+- **normal**: detabn judges data as normal (regardless of distance)
+- **warning**: detabn judges abnormal, but distance from basemap centroid is within 2×Rg
+- **danger**: detabn judges abnormal, and distance exceeds 2×Rg (radius of gyration)
+
+```python
+result = client.addplot(df_add, detabn_rate_threshold=0.8, detabn_threshold=0.1)
+
+ds = result['diagnosticScore']
+if ds:
+    print(f"Composite Status: {ds['compositeStatus']}")  # 'normal', 'warning', 'danger'
+    print(f"Distance from baseline: {ds['distance']['normalizedDistance']:.2f} × Rg")
+    print(f"Distance ± std: {ds['distance']['meanDistance']:.4f} ± {ds['distance']['distanceStd']:.4f}")
+```
 
 ### addplot_waveform()
 
@@ -716,7 +734,26 @@ Abnormality detection parameters:
     'xyData': numpy.ndarray,        # 2D coordinate data
     'addPlotNo': 1,                 # Sequential add plot number
     'abnormalityStatus': 'normal',  # 'normal', 'abnormal', or 'unknown'
-    'abnormalityScore': 0.25,       # Numerical abnormality score
+    'abnormalityScore': 0.25,       # detabn mesh density score (higher = more normal)
+    'diagnosticScore': {            # Composite diagnostic score (None if server doesn't support)
+        'detabn': {
+            'normalityScore': 0.25,     # Same as abnormalityScore
+            'abnormalityScore': 0.75,   # 1 - normalityScore
+            'status': 'abnormal',       # detabn judgment
+            'params': { ... },          # detabn parameters used
+            'identnaParams': { ... }    # identna parameters used
+        },
+        'distance': {
+            'meanDistance': 0.42,        # Mean distance from basemap centroid
+            'distanceStd': 0.08,         # Standard deviation of distances
+            'radiusOfGyration': 0.25,    # Basemap radius of gyration (Rg)
+            'normalizedDistance': 1.68,  # meanDistance / Rg
+            'exceedanceRatio': 0.35,     # Ratio of points exceeding 2×Rg
+            'threshold': 0.50,           # Distance threshold (2×Rg)
+            'status': 'warning'          # Distance judgment
+        },
+        'compositeStatus': 'warning'  # Combined: 'normal', 'warning', or 'danger'
+    },
     'shareUrl': 'http://...'        # Share URL for the updated map
 }
 ```

@@ -415,9 +415,10 @@ class toorPIA:
                 'addPlotNo': self.currentAddPlotNo,
                 'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
                 'abnormalityScore': response_data.get('abnormalityScore'),    # 異常度スコア
+                'diagnosticScore': response_data.get('diagnosticScore'),     # 複合診断スコア
                 'shareUrl': self.shareUrl
             }
-            
+
             return result
         elif response.status_code == 400:
             print("Error: Bad request. Both mapNo and mapData are missing.")
@@ -464,8 +465,12 @@ class toorPIA:
                 - addPlotNo: Additional plot number
                 - abnormalityStatus: 'normal', 'abnormal', or 'unknown'
                 - abnormalityScore: Abnormality score (float or None)
+                - diagnosticScore: Composite diagnostic score (dict or None), containing:
+                    - detabn: detabn evaluation details (normalityScore, abnormalityScore, status, params, identnaParams)
+                    - distance: Distance analysis (meanDistance, distanceStd, radiusOfGyration, normalizedDistance, exceedanceRatio, threshold, status)
+                    - compositeStatus: Combined status ('normal', 'warning', 'danger')
                 - shareUrl: Share URL for the map with this addplot
-                
+
         Note:
             mkfftSeg options (filters, window settings, etc.) are automatically inherited
             from the basemap to ensure data consistency and accurate anomaly detection.
@@ -557,9 +562,10 @@ class toorPIA:
                     'addPlotNo': self.currentAddPlotNo,
                     'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
                     'abnormalityScore': response_data.get('abnormalityScore'),    # Abnormality score
+                    'diagnosticScore': response_data.get('diagnosticScore'),     # Composite diagnostic score
                     'shareUrl': self.shareUrl
                 }
-                
+
                 return result
             elif response.status_code == 400:
                 try:
@@ -811,6 +817,10 @@ class toorPIA:
                 - addPlotNo: Additional plot number
                 - abnormalityStatus: 'normal', 'abnormal', or 'unknown'
                 - abnormalityScore: Abnormality score (float or None)
+                - diagnosticScore: Composite diagnostic score (dict or None), containing:
+                    - detabn: detabn evaluation details (normalityScore, abnormalityScore, status, params, identnaParams)
+                    - distance: Distance analysis (meanDistance, distanceStd, radiusOfGyration, normalizedDistance, exceedanceRatio, threshold, status)
+                    - compositeStatus: Combined status ('normal', 'warning', 'danger')
                 - shareUrl: Share URL for the map with this addplot
         """
         # Determine target map number
@@ -888,9 +898,10 @@ class toorPIA:
                     'addPlotNo': self.currentAddPlotNo,
                     'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
                     'abnormalityScore': response_data.get('abnormalityScore'),    # Abnormality score
+                    'diagnosticScore': response_data.get('diagnosticScore'),     # Composite diagnostic score
                     'shareUrl': self.shareUrl
                 }
-                
+
                 return result
             elif response.status_code == 400:
                 print("Error: Bad request. Invalid parameters or missing map.")
