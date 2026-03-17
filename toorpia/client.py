@@ -118,9 +118,9 @@ class toorPIA:
             mkfftseg_wf (str): Window function ("hanning" or "hamming")
             mkfftseg_wl (int): Window length
             identna_resolution (int): Mesh resolution (default: 100)
-            identna_effective_radius (float): Effective radius ratio (default: 0.1)
-            identna_er_method (str): Bandwidth method: "manual", "silverman", "knn"
-            identna_knn_k (int): k for knn method (0 = auto)
+            identna_effective_radius (float or "auto"): Effective radius. "auto" for automatic determination (default: 0.1)
+            identna_er_method (str): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
+            identna_knn_k (int): k for knn method (0 = auto ceil(sqrt(n)))
             label (str): Map label
             tag (str): Map tag
             description (str): Map description
@@ -249,9 +249,9 @@ class toorPIA:
             description (str, optional): Map description
             random_seed (int, optional): Random seed for reproducibility (default: 42)
             identna_resolution (int, optional): Mesh resolution (default: 100)
-            identna_effective_radius (float, optional): Effective radius ratio (default: 0.1)
-            identna_er_method (str, optional): Bandwidth method: "manual", "silverman", "knn"
-            identna_knn_k (int, optional): k for knn method (0 = auto)
+            identna_effective_radius (float or "auto", optional): Effective radius. "auto" for automatic determination (default: 0.1)
+            identna_er_method (str, optional): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
+            identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
             
         Returns:
             numpy.ndarray: Coordinate data (each row is [x, y]) or None on failure
@@ -476,12 +476,14 @@ class toorPIA:
             files (list): List of WAV/CSV file paths
             mapNo (int, optional): Target map number. If None, uses current mapNo
             identna_resolution (int, optional): Custom resolution for identna
-            identna_effective_radius (float, optional): Custom effective radius for identna
+            identna_effective_radius (float or "auto", optional): Custom effective radius. "auto" for automatic determination
+            identna_er_method (str, optional): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
+            identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
             detabn_max_window (int): Maximum window size for abnormality detection
             detabn_rate_threshold (float): Rate threshold for abnormality detection
             detabn_threshold (int): Threshold value for abnormality detection
             detabn_print_score (bool): Whether to print abnormality score
-            
+
         Returns:
             dict: Dictionary containing:
                 - xyData: Coordinate data as NumPy array (each row is [x, y])
@@ -489,7 +491,7 @@ class toorPIA:
                 - abnormalityStatus: 'normal', 'abnormal', or 'unknown'
                 - abnormalityScore: Abnormality score (float or None)
                 - shareUrl: Share URL for the map with this addplot
-                
+
         Note:
             mkfftSeg options (filters, window settings, etc.) are automatically inherited
             from the basemap to ensure data consistency and accurate anomaly detection.
@@ -828,12 +830,14 @@ class toorPIA:
             files (str or list): CSV file path or list of CSV file paths
             mapNo (int, optional): Target map number. If None, uses current mapNo
             identna_resolution (int, optional): Custom resolution for identna
-            identna_effective_radius (float, optional): Custom effective radius for identna
+            identna_effective_radius (float or "auto", optional): Custom effective radius. "auto" for automatic determination
+            identna_er_method (str, optional): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
+            identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
             detabn_max_window (int): Maximum window size for abnormality detection
             detabn_rate_threshold (float): Rate threshold for abnormality detection
             detabn_threshold (int): Threshold value for abnormality detection
             detabn_print_score (bool): Whether to print abnormality score
-            
+
         Returns:
             dict: Dictionary containing:
                 - xyData: Coordinate data as NumPy array (each row is [x, y])
@@ -971,8 +975,10 @@ class toorPIA:
             description (str, optional): Map description
             random_seed (int, optional): Random seed for reproducibility (default: 42)
             identna_resolution (int, optional): Mesh resolution (default: 100)
-            identna_effective_radius (float, optional): Effective radius ratio (default: 0.1)
-            
+            identna_effective_radius (float or "auto", optional): Effective radius. "auto" for automatic determination (default: 0.1)
+            identna_er_method (str, optional): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
+            identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
+
         Returns:
             dict: Dictionary containing:
                 - xyData: Coordinate data as NumPy array (each row is [x, y])
@@ -1105,7 +1111,9 @@ class toorPIA:
             mkfftseg_wf (str): Window function ("hanning" or "hamming")
             mkfftseg_wl (int): Window length
             identna_resolution (int): Mesh resolution (default: 100)
-            identna_effective_radius (float): Effective radius ratio (default: 0.1)
+            identna_effective_radius (float or "auto"): Effective radius. "auto" for automatic determination (default: 0.1)
+            identna_er_method (str): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
+            identna_knn_k (int): k for knn method (0 = auto ceil(sqrt(n)))
             label (str): Map label
             tag (str): Map tag
             description (str): Map description

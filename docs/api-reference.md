@@ -687,7 +687,9 @@ df = client.to_dataframe(features)
 Normal area identification parameters:
 
 - **identna_resolution** (int, default=100): Mesh resolution for normal area identification. Higher values provide finer granularity but require more computation.
-- **identna_effective_radius** (float, default=0.1): Effective radius as a ratio to the mesh area side length. Controls the influence radius around each data point.
+- **identna_effective_radius** (float or "auto", default=0.1): Effective radius for normal area identification. Set to a numeric value for manual specification, or `"auto"` to automatically determine the bandwidth from the data.
+- **identna_er_method** (str, default="silverman"): Bandwidth computation method when `identna_effective_radius="auto"`. `"silverman"` uses Silverman's rule (geometric mean of std devs × n^(-1/6)), `"knn"` uses median k-th nearest neighbor distance. Ignored when `effective_radius` is numeric.
+- **identna_knn_k** (int, default=0): k value for the knn method. When 0 or unspecified, automatically uses `ceil(sqrt(n))` where n is the number of basemap plots.
 
 ### detabn Parameters
 
