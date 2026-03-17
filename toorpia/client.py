@@ -171,7 +171,7 @@ class toorPIA:
             if identna_resolution is not None:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
-                identna_params['effectiveRadius'] = float(identna_effective_radius)
+                identna_params['effectiveRadius'] = identna_effective_radius if identna_effective_radius == 'auto' else float(identna_effective_radius)
             if identna_er_method is not None:
                 identna_params['erMethod'] = identna_er_method
             if identna_knn_k is not None:
@@ -311,7 +311,7 @@ class toorPIA:
             if identna_resolution is not None:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
-                identna_params['effectiveRadius'] = float(identna_effective_radius)
+                identna_params['effectiveRadius'] = identna_effective_radius if identna_effective_radius == 'auto' else float(identna_effective_radius)
             if identna_er_method is not None:
                 identna_params['erMethod'] = identna_er_method
             if identna_knn_k is not None:
@@ -540,7 +540,7 @@ class toorPIA:
             if identna_resolution is not None:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
-                identna_params['effectiveRadius'] = float(identna_effective_radius)
+                identna_params['effectiveRadius'] = identna_effective_radius if identna_effective_radius == 'auto' else float(identna_effective_radius)
             if identna_er_method is not None:
                 identna_params['erMethod'] = identna_er_method
             if identna_knn_k is not None:
@@ -876,7 +876,7 @@ class toorPIA:
             if identna_resolution is not None:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
-                identna_params['effectiveRadius'] = float(identna_effective_radius)
+                identna_params['effectiveRadius'] = identna_effective_radius if identna_effective_radius == 'auto' else float(identna_effective_radius)
             if identna_er_method is not None:
                 identna_params['erMethod'] = identna_er_method
             if identna_knn_k is not None:
@@ -1027,7 +1027,7 @@ class toorPIA:
             if identna_resolution is not None:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
-                identna_params['effectiveRadius'] = float(identna_effective_radius)
+                identna_params['effectiveRadius'] = identna_effective_radius if identna_effective_radius == 'auto' else float(identna_effective_radius)
             if identna_er_method is not None:
                 identna_params['erMethod'] = identna_er_method
             if identna_knn_k is not None:
@@ -1153,7 +1153,7 @@ class toorPIA:
             if identna_resolution is not None:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
-                identna_params['effectiveRadius'] = float(identna_effective_radius)
+                identna_params['effectiveRadius'] = identna_effective_radius if identna_effective_radius == 'auto' else float(identna_effective_radius)
             if identna_er_method is not None:
                 identna_params['erMethod'] = identna_er_method
             if identna_knn_k is not None:
