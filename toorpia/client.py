@@ -41,7 +41,7 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None):
+    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, identna_er_method=None, identna_knn_k=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
@@ -67,13 +67,14 @@ class toorPIA:
         data_dict['type_option_str'] = type_option_str
         
         # identnaパラメータを追加
-        identna_params = {}
         if identna_resolution is not None:
-            identna_params['resolution'] = identna_resolution
+            data_dict['identna_resolution'] = identna_resolution
         if identna_effective_radius is not None:
-            identna_params['effectiveRadius'] = identna_effective_radius
-        if identna_params:
-            data_dict['identnaParams'] = identna_params
+            data_dict['identna_effective_radius'] = identna_effective_radius
+        if identna_er_method is not None:
+            data_dict['identna_er_method'] = identna_er_method
+        if identna_knn_k is not None:
+            data_dict['identna_knn_k'] = int(identna_knn_k)
 
         response = requests.post(f"{API_URL}/data/fit_transform", json=data_dict, headers=headers)
         if response.status_code == 200:
@@ -97,14 +98,15 @@ class toorPIA:
                               mkfftseg_wf="hanning", mkfftseg_wl=65536,
                               # identna parameters (same as existing)
                               identna_resolution=None, identna_effective_radius=None,
+                              identna_er_method=None, identna_knn_k=None,
                               # metadata
                               label=None, tag=None, description=None):
         """
         DEPRECATED: Process WAV or CSV files directly to generate base map
-        
+
         This method is deprecated. Use basemap_waveform() instead for a unified API
         that returns structured metadata along with coordinate data.
-        
+
         Args:
             files (list): List of WAV/CSV file paths
             mkfftseg_di (int): Data Index (starting from 1, for CSV files)
@@ -117,6 +119,8 @@ class toorPIA:
             mkfftseg_wl (int): Window length
             identna_resolution (int): Mesh resolution (default: 100)
             identna_effective_radius (float): Effective radius ratio (default: 0.1)
+            identna_er_method (str): Bandwidth method: "manual", "silverman", "knn"
+            identna_knn_k (int): k for knn method (0 = auto)
             label (str): Map label
             tag (str): Map tag
             description (str): Map description
@@ -168,7 +172,15 @@ class toorPIA:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
                 identna_params['effectiveRadius'] = float(identna_effective_radius)
-            
+            if identna_er_method is not None:
+                identna_params['erMethod'] = identna_er_method
+            if identna_knn_k is not None:
+                identna_params['knnK'] = int(identna_knn_k)
+            if identna_er_method is not None:
+                identna_params['erMethod'] = identna_er_method
+            if identna_knn_k is not None:
+                identna_params['knnK'] = int(identna_knn_k)
+
             # Send as form-data
             form_data = {
                 'mkfftseg_options': json.dumps(mkfftseg_options),
@@ -219,24 +231,27 @@ class toorPIA:
     @pre_authentication
     def fit_transform_csvform(self, files, weight_option_str=None, type_option_str=None,
                             drop_columns=None, label=None, tag=None, description=None,
-                            random_seed=42, identna_resolution=None, identna_effective_radius=None):
+                            random_seed=42, identna_resolution=None, identna_effective_radius=None,
+                            identna_er_method=None, identna_knn_k=None):
         """
         DEPRECATED: Process CSV files directly to generate base map using form data upload
-        
+
         This method is deprecated. Use basemap_csvform() instead for a unified API
         that returns structured metadata along with coordinate data.
-        
+
         Args:
             files (str or list): CSV file path or list of CSV file paths (required)
             weight_option_str (str, optional): Weight options for columns (e.g., "1:1,2:0,3:1")
             type_option_str (str, optional): Type options for columns (e.g., "1:float,2:none,3:int")
             drop_columns (list, optional): List of column names to drop/exclude
             label (str, optional): Map label
-            tag (str, optional): Map tag  
+            tag (str, optional): Map tag
             description (str, optional): Map description
             random_seed (int, optional): Random seed for reproducibility (default: 42)
             identna_resolution (int, optional): Mesh resolution (default: 100)
             identna_effective_radius (float, optional): Effective radius ratio (default: 0.1)
+            identna_er_method (str, optional): Bandwidth method: "manual", "silverman", "knn"
+            identna_knn_k (int, optional): k for knn method (0 = auto)
             
         Returns:
             numpy.ndarray: Coordinate data (each row is [x, y]) or None on failure
@@ -297,6 +312,10 @@ class toorPIA:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
                 identna_params['effectiveRadius'] = float(identna_effective_radius)
+            if identna_er_method is not None:
+                identna_params['erMethod'] = identna_er_method
+            if identna_knn_k is not None:
+                identna_params['knnK'] = int(identna_knn_k)
             if identna_params:
                 form_data['identna_params'] = json.dumps(identna_params)
             
@@ -340,7 +359,7 @@ class toorPIA:
                     pass
 
     @pre_authentication
-    def addplot(self, data, *args, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None):
+    def addplot(self, data, *args, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, identna_er_method=None, identna_knn_k=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
@@ -362,9 +381,13 @@ class toorPIA:
             identna_params['resolution'] = identna_resolution
         if identna_effective_radius is not None:
             identna_params['effectiveRadius'] = identna_effective_radius
+        if identna_er_method is not None:
+            identna_params['erMethod'] = identna_er_method
+        if identna_knn_k is not None:
+            identna_params['knnK'] = int(identna_knn_k)
         if identna_params:
             data_dict['identnaParams'] = identna_params
-        
+
         # detabnパラメータを追加
         if detabn_max_window is not None:
             data_dict['detabn_max_window'] = detabn_max_window
@@ -434,8 +457,9 @@ class toorPIA:
     def addplot_waveform(self, files, mapNo=None,
                         # identna parameters
                         identna_resolution=None, identna_effective_radius=None,
+                        identna_er_method=None, identna_knn_k=None,
                         # detabn parameters
-                        detabn_max_window=5, detabn_rate_threshold=1.0, 
+                        detabn_max_window=5, detabn_rate_threshold=1.0,
                         detabn_threshold=0, detabn_print_score=True,
                         # Legacy mkfftSeg parameters (deprecated - for backward compatibility warnings)
                         mkfftseg_di=None, mkfftseg_hp=None, mkfftseg_lp=None, 
@@ -517,6 +541,10 @@ class toorPIA:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
                 identna_params['effectiveRadius'] = float(identna_effective_radius)
+            if identna_er_method is not None:
+                identna_params['erMethod'] = identna_er_method
+            if identna_knn_k is not None:
+                identna_params['knnK'] = int(identna_knn_k)
             
             # Prepare detabn parameters
             detabn_params = {
@@ -785,11 +813,12 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def addplot_csvform(self, files, mapNo=None, 
+    def addplot_csvform(self, files, mapNo=None,
                        # identna parameters
                        identna_resolution=None, identna_effective_radius=None,
+                       identna_er_method=None, identna_knn_k=None,
                        # detabn parameters
-                       detabn_max_window=5, detabn_rate_threshold=1.0, 
+                       detabn_max_window=5, detabn_rate_threshold=1.0,
                        detabn_threshold=0, detabn_print_score=True):
         """
         Process CSV files for addplot (additional plot) analysis
@@ -848,6 +877,10 @@ class toorPIA:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
                 identna_params['effectiveRadius'] = float(identna_effective_radius)
+            if identna_er_method is not None:
+                identna_params['erMethod'] = identna_er_method
+            if identna_knn_k is not None:
+                identna_params['knnK'] = int(identna_knn_k)
             
             # Prepare detabn parameters
             detabn_params = {
@@ -923,7 +956,8 @@ class toorPIA:
     @pre_authentication
     def basemap_csvform(self, files, weight_option_str=None, type_option_str=None,
                     drop_columns=None, label=None, tag=None, description=None,
-                    random_seed=42, identna_resolution=None, identna_effective_radius=None):
+                    random_seed=42, identna_resolution=None, identna_effective_radius=None,
+                    identna_er_method=None, identna_knn_k=None):
         """
         Create base map from CSV files directly with unified return structure
         
@@ -994,6 +1028,10 @@ class toorPIA:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
                 identna_params['effectiveRadius'] = float(identna_effective_radius)
+            if identna_er_method is not None:
+                identna_params['erMethod'] = identna_er_method
+            if identna_knn_k is not None:
+                identna_params['knnK'] = int(identna_knn_k)
             if identna_params:
                 form_data['identna_params'] = json.dumps(identna_params)
             
@@ -1050,6 +1088,7 @@ class toorPIA:
                         mkfftseg_wf="hanning", mkfftseg_wl=65536,
                         # identna parameters
                         identna_resolution=None, identna_effective_radius=None,
+                        identna_er_method=None, identna_knn_k=None,
                         # metadata
                         label=None, tag=None, description=None):
         """
@@ -1115,6 +1154,10 @@ class toorPIA:
                 identna_params['resolution'] = int(identna_resolution)
             if identna_effective_radius is not None:
                 identna_params['effectiveRadius'] = float(identna_effective_radius)
+            if identna_er_method is not None:
+                identna_params['erMethod'] = identna_er_method
+            if identna_knn_k is not None:
+                identna_params['knnK'] = int(identna_knn_k)
             
             # Send as form-data to new basemap_waveform endpoint
             form_data = {
