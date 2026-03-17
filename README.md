@@ -73,7 +73,7 @@ result = client.basemap_csvform(
     label="Breast Cancer Biopsy Analysis",
     tag="Medical Diagnostics",
     identna_resolution=200,
-    identna_effective_radius=0.2
+    identna_effective_radius=0.2  # or "auto" for automatic bandwidth determination
 )
 
 print(f"✅ Base map created!")
