@@ -728,9 +728,14 @@ class toorPIA:
                     if file_dir:
                         os.makedirs(file_dir, exist_ok=True)
 
-                    file_content = base64.b64decode(file_content_b64).decode('utf-8')
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write(file_content)
+                    # バイナリモードで書き出す。WAV などのバイナリファイルを UTF-8 として
+                    # decode しようとすると失敗するため、bytes をそのまま書き込む。
+                    # テキストファイル (segments.csv, mkdmatrix_meta.json 等) もバイト列として
+                    # 正しく記録される。受け側 (_read_map_data_from_directory) は既に 'rb' で
+                    # 読むので、import_map での再アップロードも問題なく動作する。
+                    file_bytes = base64.b64decode(file_content_b64)
+                    with open(file_path, 'wb') as f:
+                        f.write(file_bytes)
                         f.flush()  # バッファをフラッシュ
                         os.fsync(f.fileno())  # ファイルシステムに確実に書き込む
                 except Exception as e:
