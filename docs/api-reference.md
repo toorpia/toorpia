@@ -93,11 +93,12 @@ print(f"Share URL: {client.shareUrl}")
 - `files` (str or list): CSV file path(s) to process
 - `drop_columns` (list): Column names to exclude (recommended for simple usage)
 - `weight_option_str` (str): Manual column weight specification (1-based indexing)
-- `type_option_str` (str): Manual column type specification  
+- `type_option_str` (str): Manual column type specification
 - `label`, `tag`, `description` (str): Metadata for map identification
 - `random_seed` (int): Reproducibility seed (default: 42)
 - `identna_resolution` (int): Analysis mesh resolution (default: 100)
 - `identna_effective_radius` (float): Analysis radius ratio (default: 0.1)
+- `vector_normalization` (bool, optional): Enable/disable L2 vector normalization in the toorpia binary. Default server-side is `True`. Pass `False` to disable (adds the `-u` flag, distances reflect both angle and magnitude). The chosen value is persisted on the basemap and inherited automatically by subsequent `addplot_csvform()` calls.
 
 **Note:** `drop_columns` takes precedence over `weight_option_str`/`type_option_str`.
 
@@ -161,6 +162,9 @@ print(f"Share URL: {client.shareUrl}")
 - `mkfftseg_wf` (str): Window function "hanning" or "hamming" (default: "hanning")
 - `mkfftseg_ol` (float): Overlap percentage (default: 50.0)
 - `mkfftseg_sr` (int): Sample rate for CSV files (default: 48000)
+
+**Other Parameters:**
+- `vector_normalization` (bool, optional): Enable/disable L2 vector normalization in the toorpia binary. Default server-side is `True`. Pass `False` to disable (adds the `-u` flag, distances reflect both angle and magnitude). The chosen value is persisted on the basemap and inherited automatically by subsequent `addplot_waveform()` calls.
 
 **Returns:** Dictionary with `xyData`, `mapNo`, and `shareUrl`
 
@@ -327,6 +331,7 @@ result = client.fit_transform_csvform(
 - `label` (str): Display name for the map
 - `tag` (str): Classification tag
 - `description` (str): Detailed description
+- `vector_normalization` (bool, optional): Enable/disable L2 vector normalization in the toorpia binary. Default server-side is `True`. Pass `False` to disable (adds the `-u` flag, distances reflect both angle and magnitude). The chosen value is persisted on the basemap and inherited automatically by addplot calls.
 
 **Notes:**
 - This method processes CSV files directly without creating a DataFrame, making it efficient for large files
@@ -379,6 +384,10 @@ result = client.fit_transform_waveform(
 - `mkfftseg_sr` (int): Sample rate for CSV files (default: 48000)
 - `mkfftseg_wf` (str): Window function - "hanning" or "hamming" (default: "hanning")
 - `mkfftseg_wl` (int): Window length in samples (default: 65536)
+
+#### Other Parameters
+
+- `vector_normalization` (bool, optional): Enable/disable L2 vector normalization in the toorpia binary. Default server-side is `True`. Pass `False` to disable (adds the `-u` flag, distances reflect both angle and magnitude). The chosen value is persisted on the basemap and inherited automatically by addplot calls.
 
 **Note**: For WAV files, the sample rate is automatically detected from the file header. For CSV files, you must specify the sample rate using `mkfftseg_sr` parameter.
 

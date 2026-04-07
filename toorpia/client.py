@@ -41,7 +41,7 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, identna_er_method=None, identna_knn_k=None):
+    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, identna_er_method=None, identna_knn_k=None, vector_normalization=None):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
@@ -76,6 +76,10 @@ class toorPIA:
         if identna_knn_k is not None:
             data_dict['identna_knn_k'] = int(identna_knn_k)
 
+        # vector_normalization: 明示指定された場合のみ送信（サーバー側デフォルトはtrue）
+        if vector_normalization is not None:
+            data_dict['vector_normalization'] = bool(vector_normalization)
+
         response = requests.post(f"{API_URL}/data/fit_transform", json=data_dict, headers=headers)
         if response.status_code == 200:
             response_data = response.json()
@@ -91,14 +95,16 @@ class toorPIA:
             return None
 
     @pre_authentication
-    def fit_transform_waveform(self, files, 
+    def fit_transform_waveform(self, files,
                               # mkfftSeg parameters
-                              mkfftseg_di=1, mkfftseg_hp=-1.0, mkfftseg_lp=-1.0, 
+                              mkfftseg_di=1, mkfftseg_hp=-1.0, mkfftseg_lp=-1.0,
                               mkfftseg_nm=0, mkfftseg_ol=50.0, mkfftseg_sr=48000,
                               mkfftseg_wf="hanning", mkfftseg_wl=65536,
                               # identna parameters (same as existing)
                               identna_resolution=None, identna_effective_radius=None,
                               identna_er_method=None, identna_knn_k=None,
+                              # toorpia binary option
+                              vector_normalization=None,
                               # metadata
                               label=None, tag=None, description=None):
         """
@@ -121,10 +127,11 @@ class toorPIA:
             identna_effective_radius (float or "auto"): Effective radius. "auto" for automatic determination (default: 0.1)
             identna_er_method (str): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
             identna_knn_k (int): k for knn method (0 = auto ceil(sqrt(n)))
+            vector_normalization (bool, optional): Enable/disable L2 vector normalization in the toorpia binary. Default server-side is True. Pass False to disable (adds the `-u` flag). The chosen value is persisted on the basemap and inherited by subsequent addplot calls.
             label (str): Map label
             tag (str): Map tag
             description (str): Map description
-            
+
         Returns:
             numpy.ndarray: Coordinate data (each row is [x, y])
         """
@@ -189,10 +196,14 @@ class toorPIA:
                 'tag': tag or '',
                 'description': description or ''
             }
-            
+
+            # vector_normalization: multipart は文字列で送信
+            if vector_normalization is not None:
+                form_data['vector_normalization'] = 'true' if bool(vector_normalization) else 'false'
+
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
             response = requests.post(
-                f"{API_URL}/data/fit_transform_waveform", 
+                f"{API_URL}/data/fit_transform_waveform",
                 files=files_to_upload,
                 data=form_data,
                 headers=headers
@@ -232,7 +243,8 @@ class toorPIA:
     def fit_transform_csvform(self, files, weight_option_str=None, type_option_str=None,
                             drop_columns=None, label=None, tag=None, description=None,
                             random_seed=42, identna_resolution=None, identna_effective_radius=None,
-                            identna_er_method=None, identna_knn_k=None):
+                            identna_er_method=None, identna_knn_k=None,
+                            vector_normalization=None):
         """
         DEPRECATED: Process CSV files directly to generate base map using form data upload
 
@@ -252,7 +264,8 @@ class toorPIA:
             identna_effective_radius (float or "auto", optional): Effective radius. "auto" for automatic determination (default: 0.1)
             identna_er_method (str, optional): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
             identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
-            
+            vector_normalization (bool, optional): Enable/disable L2 vector normalization in the toorpia binary. Default server-side is True. Pass False to disable (adds the `-u` flag). The chosen value is persisted on the basemap and inherited by subsequent addplot calls.
+
         Returns:
             numpy.ndarray: Coordinate data (each row is [x, y]) or None on failure
         """
@@ -318,7 +331,11 @@ class toorPIA:
                 identna_params['knnK'] = int(identna_knn_k)
             if identna_params:
                 form_data['identna_params'] = json.dumps(identna_params)
-            
+
+            # vector_normalization: multipart は文字列で送信
+            if vector_normalization is not None:
+                form_data['vector_normalization'] = 'true' if bool(vector_normalization) else 'false'
+
             # Send as multipart/form-data (same pattern as fit_transform_waveform)
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
             response = requests.post(
@@ -972,7 +989,8 @@ class toorPIA:
     def basemap_csvform(self, files, weight_option_str=None, type_option_str=None,
                     drop_columns=None, label=None, tag=None, description=None,
                     random_seed=42, identna_resolution=None, identna_effective_radius=None,
-                    identna_er_method=None, identna_knn_k=None):
+                    identna_er_method=None, identna_knn_k=None,
+                    vector_normalization=None):
         """
         Create base map from CSV files directly with unified return structure
         
@@ -989,6 +1007,7 @@ class toorPIA:
             identna_effective_radius (float or "auto", optional): Effective radius. "auto" for automatic determination (default: 0.1)
             identna_er_method (str, optional): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
             identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
+            vector_normalization (bool, optional): Enable/disable L2 vector normalization in the toorpia binary. Default server-side is True. Pass False to disable (adds the `-u` flag). The chosen value is persisted on the basemap and inherited by subsequent addplot calls.
 
         Returns:
             dict: Dictionary containing:
@@ -1051,7 +1070,11 @@ class toorPIA:
                 identna_params['knnK'] = int(identna_knn_k)
             if identna_params:
                 form_data['identna_params'] = json.dumps(identna_params)
-            
+
+            # vector_normalization: multipart は文字列で送信
+            if vector_normalization is not None:
+                form_data['vector_normalization'] = 'true' if bool(vector_normalization) else 'false'
+
             # Send as multipart/form-data to new basemap_csvform endpoint
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
             response = requests.post(
@@ -1098,14 +1121,16 @@ class toorPIA:
                     pass
 
     @pre_authentication
-    def basemap_waveform(self, files, 
+    def basemap_waveform(self, files,
                         # mkfftSeg parameters
-                        mkfftseg_di=1, mkfftseg_hp=-1.0, mkfftseg_lp=-1.0, 
+                        mkfftseg_di=1, mkfftseg_hp=-1.0, mkfftseg_lp=-1.0,
                         mkfftseg_nm=0, mkfftseg_ol=50.0, mkfftseg_sr=48000,
                         mkfftseg_wf="hanning", mkfftseg_wl=65536,
                         # identna parameters
                         identna_resolution=None, identna_effective_radius=None,
                         identna_er_method=None, identna_knn_k=None,
+                        # toorpia binary option
+                        vector_normalization=None,
                         # metadata
                         label=None, tag=None, description=None):
         """
@@ -1125,10 +1150,11 @@ class toorPIA:
             identna_effective_radius (float or "auto"): Effective radius. "auto" for automatic determination (default: 0.1)
             identna_er_method (str): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
             identna_knn_k (int): k for knn method (0 = auto ceil(sqrt(n)))
+            vector_normalization (bool, optional): Enable/disable L2 vector normalization in the toorpia binary. Default server-side is True. Pass False to disable (adds the `-u` flag). The chosen value is persisted on the basemap and inherited by subsequent addplot calls.
             label (str): Map label
             tag (str): Map tag
             description (str): Map description
-            
+
         Returns:
             dict: Dictionary containing:
                 - xyData: Coordinate data as NumPy array (each row is [x, y])
@@ -1186,10 +1212,14 @@ class toorPIA:
                 'tag': tag or '',
                 'description': description or ''
             }
-            
+
+            # vector_normalization: multipart は文字列で送信
+            if vector_normalization is not None:
+                form_data['vector_normalization'] = 'true' if bool(vector_normalization) else 'false'
+
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
             response = requests.post(
-                f"{API_URL}/data/basemap_waveform", 
+                f"{API_URL}/data/basemap_waveform",
                 files=files_to_upload,
                 data=form_data,
                 headers=headers
