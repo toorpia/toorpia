@@ -487,6 +487,59 @@ if ds:
     print(f"Distance ± std: {ds['distance']['meanDistance']:.4f} ± {ds['distance']['distanceStd']:.4f}")
 ```
 
+**Per-Point Distance Analysis:**
+
+When you submit multiple records in a single `addplot()` call, the aggregate fields
+(`meanDistance` / `normalizedDistance` / `distanceStd` / `exceedanceRatio`) summarize
+all M points. To inspect each point individually, use the per-point arrays:
+
+- `distancesPerPoint[j]` — Euclidean distance of point j from the basemap centroid.
+- `normalizedDistancesPerPoint[j]` — `distancesPerPoint[j] / radiusOfGyration`,
+  which is the per-point normalized deviation in units of Rg.
+
+```python
+import numpy as np
+
+result = client.addplot(df_add_30days, detabn_threshold=0.5, detabn_max_window=1)
+ds = result['diagnosticScore']
+
+# Per-point normalized deviation (one value per input record)
+per_point = ds['distance']['normalizedDistancesPerPoint']
+print(f"Max deviation: {max(per_point):.2f} × Rg at index {np.argmax(per_point)}")
+
+# Same value can be approximated client-side from xyData since the basemap is
+# centered near the origin (see "Basemap Coordinate System" below):
+xy = result['xyData']
+rg = ds['distance']['radiusOfGyration']
+approx = np.linalg.norm(xy, axis=1) / rg         # approx ≈ per_point, within ~1e-3 × Rg
+```
+
+### Basemap Coordinate System
+
+toorPIA basemaps are constructed so that **the centroid of the base point cloud
+is placed at the origin `(0, 0)`** in the engine's double-precision internal
+evaluation. The persisted coordinate file `xy.dat` — which is the source of the
+`xyData` field returned to clients and is also the input that addplot uses to
+evaluate new points — is written with approximately 4 decimal digits of
+precision. This output rounding introduces a small numerical residual in the
+observable centroid, typically on the order of `1e-3 × radiusOfGyration` or
+smaller. Practical consequences:
+
+- `radiusOfGyration` is, to a very close approximation, the RMS distance of base
+  points from the origin.
+- Server-side `distancesPerPoint` / `normalizedDistancesPerPoint` are computed
+  in the same `xy.dat` coordinate system that addplot uses, so they are exact
+  values within that system — not approximations.
+- For any addplot point `(x_j, y_j)`, the server's `distancesPerPoint[j]` is
+  well approximated by `sqrt(x_j**2 + y_j**2)`, with an absolute error bounded
+  by the centroid offset described above.
+
+For exact per-point distances, read `distancesPerPoint` and
+`normalizedDistancesPerPoint` directly from the addplot response. Use the
+`sqrt(x_j**2 + y_j**2)` approximation only when working with an older server
+build that does not yet return the `*PerPoint` fields, or when an absolute error
+of `~1e-3 × radiusOfGyration` is acceptable.
+
 ### addplot_waveform()
 
 For WAV and CSV files, you can add waveform data to an existing map using the `addplot_waveform` method. This is particularly useful for acoustic monitoring, vibration analysis, and time-series anomaly detection.
@@ -755,13 +808,19 @@ Abnormality detection parameters:
             'identnaParams': { ... }    # identna parameters used
         },
         'distance': {
-            'meanDistance': 0.42,        # Mean distance from basemap centroid
-            'distanceStd': 0.08,         # Standard deviation of distances
-            'radiusOfGyration': 0.25,    # Basemap radius of gyration (Rg)
-            'normalizedDistance': 1.68,  # meanDistance / Rg
-            'exceedanceRatio': 0.35,     # Ratio of points exceeding 2×Rg
-            'threshold': 0.50,           # Distance threshold (2×Rg)
-            'status': 'warning'          # Distance judgment
+            'meanDistance': 0.42,         # Mean distance from basemap centroid
+            'distanceStd': 0.08,          # Standard deviation of distances
+            'radiusOfGyration': 0.25,     # Basemap radius of gyration (Rg)
+            'normalizedDistance': 1.68,   # meanDistance / Rg (aggregate, length M average)
+            'exceedanceRatio': 0.35,      # Ratio of points exceeding 2×Rg
+            'threshold': 0.50,            # Distance threshold (2×Rg)
+            'status': 'warning',          # Distance judgment
+            'distancesPerPoint': [        # Per-point distances from basemap centroid (length = M)
+                0.40, 0.43, 0.42, ...
+            ],
+            'normalizedDistancesPerPoint': [  # Per-point normalized distance = d_j / Rg (length = M)
+                1.60, 1.72, 1.68, ...
+            ]
         },
         'compositeStatus': 'warning'  # Combined: 'normal', 'warning', or 'danger'
     },
