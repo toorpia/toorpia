@@ -156,9 +156,11 @@ def main():
         f"observed = {rel_offset:.2e}",
     )
     print(
-        "  (注) この残差は toorPIA エンジンが構築時に重心を原点に揃える際の数値計算上の\n"
-        "       残差で、典型的には 1e-3 × Rg 程度です。点単位距離を厳密値で必要とする場合は\n"
-        "       diagnosticScore.distance.distancesPerPoint を参照してください。"
+        "  (注) toorPIA コアバイナリ内部 (倍精度) では重心を厳密に原点に揃えていますが、\n"
+        "       座標出力 (xy.dat) は下4桁程度の精度で書き出されるため、xy.dat ベースで\n"
+        "       観測される残差は典型的に 1e-3 × Rg 程度となります。addplot もこの xy.dat\n"
+        "       を入力として点単位距離を評価するため、server から返る distancesPerPoint\n"
+        "       はこの座標系における厳密値です（xyData との近似一致はその副産物）。"
     )
 
     print("\n--- Phase 5: 集約値との整合 ---")

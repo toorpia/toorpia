@@ -517,22 +517,25 @@ approx = np.linalg.norm(xy, axis=1) / rg         # approx ≈ per_point, within 
 ### Basemap Coordinate System
 
 toorPIA basemaps are constructed so that **the centroid of the base point cloud
-sits at or very near the origin `(0, 0)`** of the resulting coordinate system.
-This centering is performed automatically during basemap construction and
-requires no user configuration. A small numerical residual may remain — in
-practice the centroid offset is typically on the order of `1e-3 × radiusOfGyration`
-or smaller. Practical consequences:
+is placed at the origin `(0, 0)`** in the engine's double-precision internal
+evaluation. The persisted coordinate file `xy.dat` — which is the source of the
+`xyData` field returned to clients and is also the input that addplot uses to
+evaluate new points — is written with approximately 4 decimal digits of
+precision. This output rounding introduces a small numerical residual in the
+observable centroid, typically on the order of `1e-3 × radiusOfGyration` or
+smaller. Practical consequences:
 
 - `radiusOfGyration` is, to a very close approximation, the RMS distance of base
   points from the origin.
-- For any addplot point `(x_j, y_j)`, the distance from the base centroid is
-  well approximated by `sqrt(x_j**2 + y_j**2)`. This lets client code estimate
-  `distancesPerPoint` and `normalizedDistancesPerPoint` directly from `xyData`,
-  with an absolute error bounded by the centroid offset magnitude.
+- Server-side `distancesPerPoint` / `normalizedDistancesPerPoint` are computed
+  in the same `xy.dat` coordinate system that addplot uses, so they are exact
+  values within that system — not approximations.
+- For any addplot point `(x_j, y_j)`, the server's `distancesPerPoint[j]` is
+  well approximated by `sqrt(x_j**2 + y_j**2)`, with an absolute error bounded
+  by the centroid offset described above.
 
-For values that match the server's `distancesPerPoint` /
-`normalizedDistancesPerPoint` exactly (i.e. computed against the true centroid),
-read those fields directly from the addplot response. Use the
+For exact per-point distances, read `distancesPerPoint` and
+`normalizedDistancesPerPoint` directly from the addplot response. Use the
 `sqrt(x_j**2 + y_j**2)` approximation only when working with an older server
 build that does not yet return the `*PerPoint` fields, or when an absolute error
 of `~1e-3 × radiusOfGyration` is acceptable.
