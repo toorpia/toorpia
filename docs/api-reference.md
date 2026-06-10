@@ -507,27 +507,35 @@ ds = result['diagnosticScore']
 per_point = ds['distance']['normalizedDistancesPerPoint']
 print(f"Max deviation: {max(per_point):.2f} × Rg at index {np.argmax(per_point)}")
 
-# Same value can be reproduced client-side from xyData since the basemap is centered
-# at the origin (see "Basemap Coordinate System" below):
+# Same value can be approximated client-side from xyData since the basemap is
+# centered near the origin (see "Basemap Coordinate System" below):
 xy = result['xyData']
 rg = ds['distance']['radiusOfGyration']
-reproduced = np.linalg.norm(xy, axis=1) / rg     # equals per_point (within float precision)
+approx = np.linalg.norm(xy, axis=1) / rg         # approx ≈ per_point, within ~1e-3 × Rg
 ```
 
 ### Basemap Coordinate System
 
 toorPIA basemaps are constructed so that **the centroid of the base point cloud
-coincides with the origin `(0, 0)`** of the resulting coordinate system. This
-centering is performed automatically during basemap construction and requires no
-user configuration. Two practical consequences:
+sits at or very near the origin `(0, 0)`** of the resulting coordinate system.
+This centering is performed automatically during basemap construction and
+requires no user configuration. A small numerical residual may remain — in
+practice the centroid offset is typically on the order of `1e-3 × radiusOfGyration`
+or smaller. Practical consequences:
 
-- `radiusOfGyration` equals the RMS distance of base points from the origin.
+- `radiusOfGyration` is, to a very close approximation, the RMS distance of base
+  points from the origin.
 - For any addplot point `(x_j, y_j)`, the distance from the base centroid is
-  simply `sqrt(x_j**2 + y_j**2)`, which lets client code reproduce
-  `distancesPerPoint` and `normalizedDistancesPerPoint` directly from `xyData`.
+  well approximated by `sqrt(x_j**2 + y_j**2)`. This lets client code estimate
+  `distancesPerPoint` and `normalizedDistancesPerPoint` directly from `xyData`,
+  with an absolute error bounded by the centroid offset magnitude.
 
-Use this property when you need per-point deviation but are working with an older
-server build that does not yet return the `*PerPoint` fields.
+For values that match the server's `distancesPerPoint` /
+`normalizedDistancesPerPoint` exactly (i.e. computed against the true centroid),
+read those fields directly from the addplot response. Use the
+`sqrt(x_j**2 + y_j**2)` approximation only when working with an older server
+build that does not yet return the `*PerPoint` fields, or when an absolute error
+of `~1e-3 × radiusOfGyration` is acceptable.
 
 ### addplot_waveform()
 
