@@ -487,6 +487,48 @@ if ds:
     print(f"Distance ± std: {ds['distance']['meanDistance']:.4f} ± {ds['distance']['distanceStd']:.4f}")
 ```
 
+**Per-Point Distance Analysis:**
+
+When you submit multiple records in a single `addplot()` call, the aggregate fields
+(`meanDistance` / `normalizedDistance` / `distanceStd` / `exceedanceRatio`) summarize
+all M points. To inspect each point individually, use the per-point arrays:
+
+- `distancesPerPoint[j]` — Euclidean distance of point j from the basemap centroid.
+- `normalizedDistancesPerPoint[j]` — `distancesPerPoint[j] / radiusOfGyration`,
+  which is the per-point normalized deviation in units of Rg.
+
+```python
+import numpy as np
+
+result = client.addplot(df_add_30days, detabn_threshold=0.5, detabn_max_window=1)
+ds = result['diagnosticScore']
+
+# Per-point normalized deviation (one value per input record)
+per_point = ds['distance']['normalizedDistancesPerPoint']
+print(f"Max deviation: {max(per_point):.2f} × Rg at index {np.argmax(per_point)}")
+
+# Same value can be reproduced client-side from xyData since the basemap is centered
+# at the origin (see "Basemap Coordinate System" below):
+xy = result['xyData']
+rg = ds['distance']['radiusOfGyration']
+reproduced = np.linalg.norm(xy, axis=1) / rg     # equals per_point (within float precision)
+```
+
+### Basemap Coordinate System
+
+toorPIA basemaps are constructed so that **the centroid of the base point cloud
+coincides with the origin `(0, 0)`** of the resulting coordinate system. This
+centering is performed automatically during basemap construction and requires no
+user configuration. Two practical consequences:
+
+- `radiusOfGyration` equals the RMS distance of base points from the origin.
+- For any addplot point `(x_j, y_j)`, the distance from the base centroid is
+  simply `sqrt(x_j**2 + y_j**2)`, which lets client code reproduce
+  `distancesPerPoint` and `normalizedDistancesPerPoint` directly from `xyData`.
+
+Use this property when you need per-point deviation but are working with an older
+server build that does not yet return the `*PerPoint` fields.
+
 ### addplot_waveform()
 
 For WAV and CSV files, you can add waveform data to an existing map using the `addplot_waveform` method. This is particularly useful for acoustic monitoring, vibration analysis, and time-series anomaly detection.
@@ -755,13 +797,19 @@ Abnormality detection parameters:
             'identnaParams': { ... }    # identna parameters used
         },
         'distance': {
-            'meanDistance': 0.42,        # Mean distance from basemap centroid
-            'distanceStd': 0.08,         # Standard deviation of distances
-            'radiusOfGyration': 0.25,    # Basemap radius of gyration (Rg)
-            'normalizedDistance': 1.68,  # meanDistance / Rg
-            'exceedanceRatio': 0.35,     # Ratio of points exceeding 2×Rg
-            'threshold': 0.50,           # Distance threshold (2×Rg)
-            'status': 'warning'          # Distance judgment
+            'meanDistance': 0.42,         # Mean distance from basemap centroid
+            'distanceStd': 0.08,          # Standard deviation of distances
+            'radiusOfGyration': 0.25,     # Basemap radius of gyration (Rg)
+            'normalizedDistance': 1.68,   # meanDistance / Rg (aggregate, length M average)
+            'exceedanceRatio': 0.35,      # Ratio of points exceeding 2×Rg
+            'threshold': 0.50,            # Distance threshold (2×Rg)
+            'status': 'warning',          # Distance judgment
+            'distancesPerPoint': [        # Per-point distances from basemap centroid (length = M)
+                0.40, 0.43, 0.42, ...
+            ],
+            'normalizedDistancesPerPoint': [  # Per-point normalized distance = d_j / Rg (length = M)
+                1.60, 1.72, 1.68, ...
+            ]
         },
         'compositeStatus': 'warning'  # Combined: 'normal', 'warning', or 'danger'
     },
