@@ -8,8 +8,10 @@ This document provides detailed specifications for all methods and parameters of
 - [Core API Methods](#core-api-methods)
   - [basemap_csvform()](#basemap_csvform) - CSV basemap creation
   - [basemap_waveform()](#basemap_waveform) - Audio basemap creation  
+  - [basemap_embedding()](#basemap_embedding) - Embedding basemap creation
   - [addplot_csvform()](#addplot_csvform) - CSV anomaly detection
   - [addplot_waveform()](#addplot_waveform) - Audio anomaly detection
+  - [addplot_embedding()](#addplot_embedding) - Embedding anomaly detection
 - [Alternative Methods](#alternative-methods)
   - [fit_transform()](#fit_transform) - DataFrame-based processing
   - [addplot()](#addplot) - DataFrame-based anomaly detection
@@ -168,6 +170,59 @@ print(f"Share URL: {client.shareUrl}")
 
 **Returns:** Dictionary with `xyData`, `mapNo`, and `shareUrl`
 
+### basemap_embedding()
+
+Creates a base map from embedding vectors (LLM embeddings, image features, etc.), establishing normal data patterns for anomaly detection. Accepts CSV files or in-memory data (2D numpy.ndarray / pandas.DataFrame).
+
+```python
+import numpy as np
+
+# Direct ndarray input (rows = samples, columns = embedding dimensions)
+embeddings = np.load("sentence_embeddings.npy")  # e.g. shape (1000, 768)
+result = client.basemap_embedding(
+    embeddings,
+    label="Sentence Embedding Baseline",
+    tag="NLP Monitoring"
+)
+
+# CSV file input (leading non-numeric columns are auto-detected as ID columns)
+result = client.basemap_embedding(
+    "image_features.csv",   # e.g. filename column + 768 feature columns
+    label="Image Feature Baseline"
+)
+
+# Embeddings whose norm carries information: disable L2 normalization
+result = client.basemap_embedding(
+    "embeddings.csv",
+    l2_normalization=False
+)
+
+# ID columns that look numeric: specify their count explicitly
+result = client.basemap_embedding(
+    "embeddings_with_numeric_ids.csv",
+    id_columns=1
+)
+
+# Access results with unified structure
+print(f"Map Number: {result['mapNo']}")
+print(f"Coordinates shape: {result['xyData'].shape}")
+print(f"View online: {result['shareUrl']}")
+```
+
+**Parameters:**
+- `files` (str, list, numpy.ndarray or pandas.DataFrame): CSV file path(s) or in-memory embedding data. Rows are samples, columns are embedding dimensions. Header rows are auto-detected; leading non-numeric columns are auto-detected as ID/label columns. An ndarray is uploaded as a headerless CSV (dimension names are auto-generated); a DataFrame keeps its header.
+- `l2_normalization` (bool, optional): Enable/disable L2 normalization of each input vector. Default server-side is `True`. Pass `False` for embeddings whose norm carries information.
+- `id_columns` (int, optional): Number of leading ID/label columns. Usually unnecessary (auto-detected); set only when the ID columns look numeric.
+- `label`, `tag`, `description` (str): Metadata for map identification
+- `identna_resolution` (int): Analysis mesh resolution (default: 100)
+- `identna_effective_radius` (float or "auto"): Analysis radius ratio (default: 0.1)
+- `identna_er_method` (str): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
+- `identna_knn_k` (int): k for knn method (0 = auto ceil(sqrt(n)))
+
+**Note:** `vector_normalization` is not applicable to embedding maps — the engine always uses the euclidean distance mode for embedding data.
+
+**Returns:** Dictionary with `xyData`, `mapNo`, and `shareUrl`
+
 ### addplot_csvform()
 
 Tests new CSV data against an existing CSV-based map for anomaly detection. Automatically inherits processing parameters from the base map.
@@ -260,6 +315,43 @@ print(f"Acoustic analysis #{result['addPlotNo']} completed")
 - **Multi-format support**: Handles WAV files and CSV time-series data
 
 **Returns:** Dictionary with acoustic anomaly detection results and composite diagnostic score
+
+### addplot_embedding()
+
+Tests new embedding data against an existing embedding-based map for anomaly detection. Preprocessing options (`l2_normalization`, `id_columns`) are automatically inherited from the base map and cannot be specified manually.
+
+```python
+import numpy as np
+
+# Test new embeddings against the most recent base map
+new_embeddings = np.load("new_embeddings.npy")
+result = client.addplot_embedding(new_embeddings)
+
+# Test against a specific base map
+result = client.addplot_embedding("new_features.csv", mapNo=123)
+
+# Advanced anomaly detection parameters
+result = client.addplot_embedding(
+    new_embeddings,
+    detabn_max_window=5,         # Anomaly detection window
+    detabn_rate_threshold=0.8,   # Anomaly rate threshold
+    detabn_threshold=0.1,        # Normal area threshold
+    detabn_print_score=True      # Include detailed scores
+)
+
+# Analyze results
+print(f"Status: {result['abnormalityStatus']}")  # 'normal', 'abnormal', 'unknown'
+print(f"Score: {result['abnormalityScore']}")
+print(f"Data points analyzed: {result['xyData'].shape[0]}")
+print(f"View results: {result['shareUrl']}")
+```
+
+**Key Features:**
+- **Automatic consistency**: `l2_normalization`, `id_columns` and dimension names are inherited from the base map; specifying preprocessing options here is rejected by the server
+- **Dimension validation**: Processing fails with a clear error when the dimension count differs from the base map
+- **Flexible input**: CSV file path(s), 2D numpy.ndarray, or pandas.DataFrame (same conventions as `basemap_embedding()`)
+
+**Returns:** Dictionary with anomaly detection results, coordinate data, and composite diagnostic score
 
 ---
 
@@ -756,7 +848,7 @@ features = client.get_addplot_features(map_no=123, addplot_no=1)
 df = client.to_dataframe(features)
 ```
 
-**Important**: Feature analysis is only supported for DataFrame and CSV-based maps. This function is **not available for waveform-based maps** due to technical limitations.
+**Important**: Feature analysis is only supported for DataFrame and CSV-based maps. This function is **not available for waveform-based or embedding-based maps** due to technical limitations.
 
 ---
 
@@ -779,6 +871,15 @@ Abnormality detection parameters:
 - **detabn_rate_threshold** (float, default=1.0): Lower threshold for abnormality rate (0.0 < rate <= 1.0). If rate >= threshold, data is considered abnormal
 - **detabn_threshold** (int/float, default=0): Threshold for relative normal area value. If value > threshold, the point is considered normal
 - **detabn_print_score** (bool, default=True): Whether to include detailed score information in the analysis
+
+### Embedding Preprocessing Parameters
+
+Embedding preprocessing parameters, accepted by `basemap_embedding()` only. `addplot_embedding()` automatically inherits them from the base map and rejects manual specification.
+
+- **l2_normalization** (bool, default=True): L2-normalize each input vector to a unit vector before mapping. Pass `False` for embeddings whose norm carries information.
+- **id_columns** (int, default=None): Number of leading ID/label columns to pass through. When unspecified, leading non-numeric columns are auto-detected. Set explicitly only when the ID columns look numeric.
+
+Note: `vector_normalization` is not applicable to embedding maps — the engine always uses the euclidean distance mode for embedding data.
 
 ---
 
@@ -845,13 +946,14 @@ toorPIA enforces strict compatibility between base map creation methods and addp
 
 ### Compatibility Matrix
 
-| Base Map Method | addplot() | addplot_csvform() | addplot_waveform() |
-|---|:---:|:---:|:---:|
-| **basemap_csvform()** | ❌ | ✅ | ❌ |
-| **basemap_waveform()** | ❌ | ❌ | ✅ |
-| **fit_transform()** | ✅ | ❌ | ❌ |
-| **fit_transform_csvform()** | ❌ | ✅ | ❌ |
-| **fit_transform_waveform()** | ❌ | ❌ | ✅ |
+| Base Map Method | addplot() | addplot_csvform() | addplot_waveform() | addplot_embedding() |
+|---|:---:|:---:|:---:|:---:|
+| **basemap_csvform()** | ❌ | ✅ | ❌ | ❌ |
+| **basemap_waveform()** | ❌ | ❌ | ✅ | ❌ |
+| **basemap_embedding()** | ❌ | ❌ | ❌ | ✅ |
+| **fit_transform()** | ✅ | ❌ | ❌ | ❌ |
+| **fit_transform_csvform()** | ❌ | ✅ | ❌ | ❌ |
+| **fit_transform_waveform()** | ❌ | ❌ | ✅ | ❌ |
 
 ### Supported Processing Methods
 
@@ -870,17 +972,24 @@ toorPIA enforces strict compatibility between base map creation methods and addp
    - Addplot: Uses WAV/CSV files with FFT-based feature extraction
    - Use case: Audio analysis, vibration monitoring
 
+4. **Embedding Processing** (`basemap_embedding` + `addplot_embedding`)
+   - Base map: Created from embedding vectors (CSV files or numpy/pandas data)
+   - Addplot: Uses embedding data with preprocessing inherited from the base map
+   - Use case: LLM/image embedding monitoring, representation drift detection
+
 ### Compatibility Rules
 
 **✅ Compatible Combinations:**
 - DataFrame base map → `addplot()` method
 - CSV base map → `addplot_csvform()` method
 - Waveform base map → `addplot_waveform()` method
+- Embedding base map → `addplot_embedding()` method
 
 **❌ Incompatible Combinations:**
-- DataFrame base map → `addplot_csvform()` or `addplot_waveform()`
-- CSV base map → `addplot()` or `addplot_waveform()`
-- Waveform base map → `addplot()` or `addplot_csvform()`
+- DataFrame base map → `addplot_csvform()`, `addplot_waveform()` or `addplot_embedding()`
+- CSV base map → `addplot()`, `addplot_waveform()` or `addplot_embedding()`
+- Waveform base map → `addplot()`, `addplot_csvform()` or `addplot_embedding()`
+- Embedding base map → `addplot()`, `addplot_csvform()` or `addplot_waveform()`
 
 ### Error Messages
 

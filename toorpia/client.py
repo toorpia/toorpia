@@ -991,6 +991,176 @@ class toorPIA:
                     pass
 
     @pre_authentication
+    def addplot_embedding(self, files, mapNo=None,
+                         # identna parameters
+                         identna_resolution=None, identna_effective_radius=None,
+                         identna_er_method=None, identna_knn_k=None,
+                         # detabn parameters
+                         detabn_max_window=5, detabn_rate_threshold=1.0,
+                         detabn_threshold=0, detabn_print_score=True):
+        """
+        Process embedding data for addplot (additional plot) analysis
+
+        Preprocessing options (l2_normalization, id_columns) are automatically
+        inherited from the base map on the server side and cannot be specified
+        here. This guarantees that basemap and addplot use identical
+        preprocessing and consistent dimension names.
+
+        Accepts CSV file path(s) or in-memory embedding data (2D numpy.ndarray
+        or pandas.DataFrame), with the same CSV conversion conventions as
+        basemap_embedding().
+
+        Args:
+            files (str, list, numpy.ndarray or pandas.DataFrame): CSV file path(s) or in-memory embedding data
+            mapNo (int, optional): Target map number. If None, uses current mapNo
+            identna_resolution (int, optional): Custom resolution for identna
+            identna_effective_radius (float or "auto", optional): Custom effective radius. "auto" for automatic determination
+            identna_er_method (str, optional): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
+            identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
+            detabn_max_window (int): Maximum window size for abnormality detection
+            detabn_rate_threshold (float): Rate threshold for abnormality detection
+            detabn_threshold (int): Threshold value for abnormality detection
+            detabn_print_score (bool): Whether to print abnormality score
+
+        Returns:
+            dict: Dictionary containing:
+                - xyData: Coordinate data as NumPy array (each row is [x, y])
+                - addPlotNo: Additional plot number
+                - abnormalityStatus: 'normal', 'abnormal', or 'unknown'
+                - abnormalityScore: Abnormality score (float or None)
+                - diagnosticScore: Composite diagnostic score (dict or None), containing:
+                    - detabn: detabn evaluation details (normalityScore, abnormalityScore, status, params, identnaParams)
+                    - distance: Distance analysis (meanDistance, distanceStd, radiusOfGyration, normalizedDistance, exceedanceRatio, threshold, status)
+                    - compositeStatus: Combined status ('normal', 'warning', 'danger')
+                - shareUrl: Share URL for the map with this addplot
+        """
+        # Determine target map number
+        target_mapNo = mapNo if mapNo is not None else self.mapNo
+        if target_mapNo is None:
+            print("Error: Map number is not specified. Please provide mapNo or use basemap_embedding() first.")
+            return None
+
+        # ndarray/DataFrame direct input: convert to a temporary CSV file
+        temp_csv_path = None
+        if not isinstance(files, (str, list)):
+            temp_csv_path = self._convert_inmemory_embedding(files)
+            if temp_csv_path is None:
+                return None
+            files = [temp_csv_path]
+
+        # File existence and format check (accept both string and list, same as csvform)
+        if isinstance(files, str):
+            files = [files]  # Convert single file to list
+
+        if not files or not isinstance(files, list):
+            print("Error: files must be a file path (string) or list of file paths")
+            return None
+
+        files_to_upload = []
+        for file_path in files:
+            if not os.path.exists(file_path):
+                print(f"Error: File not found: {file_path}")
+                return None
+
+            # File format check (.csv only)
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext != '.csv':
+                print(f"Error: Unsupported file format: {ext}. Only .csv files are supported.")
+                return None
+
+            files_to_upload.append(('files', open(file_path, 'rb')))
+
+        try:
+            # Prepare identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = identna_effective_radius if identna_effective_radius == 'auto' else float(identna_effective_radius)
+            if identna_er_method is not None:
+                identna_params['erMethod'] = identna_er_method
+            if identna_knn_k is not None:
+                identna_params['knnK'] = int(identna_knn_k)
+
+            # Prepare detabn parameters
+            detabn_params = {
+                'maxWindow': int(detabn_max_window),
+                'rateThreshold': float(detabn_rate_threshold),
+                'threshold': int(detabn_threshold),
+                'printScore': bool(detabn_print_score)
+            }
+
+            # Send as form-data
+            form_data = {
+                'mapNo': str(target_mapNo),
+                'detabn_options': json.dumps(detabn_params)
+            }
+            if identna_params:
+                form_data['identna_options'] = json.dumps(identna_params)
+
+            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
+            response = requests.post(
+                f"{API_URL}/data/addplot_embedding",
+                files=files_to_upload,
+                data=form_data,
+                headers=headers
+            )
+
+            if response.status_code == 200:
+                response_data = response.json()
+                addXyData = response_data['resdata']
+                self.currentAddPlotNo = response_data.get('addPlotNo')  # Save addplot number
+                self.shareUrl = response_data.get('shareUrl')  # Save share URL
+
+                # Convert coordinate data to NumPy array
+                np_array = np.array(addXyData)
+
+                # Return extended result with coordinate data and abnormality information
+                result = {
+                    'xyData': np_array,
+                    'addPlotNo': self.currentAddPlotNo,
+                    'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
+                    'abnormalityScore': response_data.get('abnormalityScore'),    # Abnormality score
+                    'diagnosticScore': response_data.get('diagnosticScore'),     # Composite diagnostic score
+                    'shareUrl': self.shareUrl
+                }
+
+                return result
+            elif response.status_code == 400:
+                print("Error: Bad request. Invalid parameters or missing map.")
+                return None
+            elif response.status_code == 401:
+                print("Error: Unauthorized. Invalid session key or map number.")
+                return None
+            else:
+                try:
+                    error_message = response.json().get('message', 'Unknown error')
+                except:
+                    error_message = f"HTTP {response.status_code}: {response.text}"
+                print(f"Embedding addplot failed. Server responded with error: {error_message}")
+                return None
+
+        except requests.exceptions.RequestException as e:
+            print(f"Network error during file upload: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"Error processing embedding addplot: {str(e)}")
+            return None
+        finally:
+            # Ensure file handles are closed
+            for _, file_handle in files_to_upload:
+                try:
+                    file_handle.close()
+                except:
+                    pass
+            # Remove the temporary CSV file created from ndarray/DataFrame input
+            if temp_csv_path is not None:
+                try:
+                    os.remove(temp_csv_path)
+                except:
+                    pass
+
+    @pre_authentication
     def basemap_csvform(self, files, weight_option_str=None, type_option_str=None,
                     drop_columns=None, label=None, tag=None, description=None,
                     random_seed=42, identna_resolution=None, identna_effective_radius=None,
@@ -1122,6 +1292,151 @@ class toorPIA:
             for _, file_handle in files_to_upload:
                 try:
                     file_handle.close()
+                except:
+                    pass
+
+    @pre_authentication
+    def basemap_embedding(self, files, l2_normalization=None, id_columns=None,
+                    label=None, tag=None, description=None,
+                    identna_resolution=None, identna_effective_radius=None,
+                    identna_er_method=None, identna_knn_k=None):
+        """
+        Create base map from embedding vectors with unified return structure
+
+        Accepts CSV file path(s) or in-memory embedding data (2D numpy.ndarray
+        or pandas.DataFrame). Input rows are samples and columns are embedding
+        dimensions; header rows are auto-detected and leading non-numeric
+        columns are auto-detected as ID/label columns. An ndarray is uploaded
+        as a headerless CSV so that dimension names are auto-generated
+        consistently between basemap and addplot; a DataFrame keeps its header.
+
+        Note:
+            vector_normalization is not applicable to embedding maps (the
+            engine always uses the euclidean distance mode).
+
+        Args:
+            files (str, list, numpy.ndarray or pandas.DataFrame): CSV file path(s) or in-memory embedding data
+            l2_normalization (bool, optional): Enable/disable L2 normalization of each input vector. Default server-side is True. Pass False for embeddings whose norm carries information.
+            id_columns (int, optional): Number of leading ID/label columns. Usually unnecessary: leading non-numeric columns are auto-detected. Set only when the ID columns look numeric.
+            label (str, optional): Map label
+            tag (str, optional): Map tag
+            description (str, optional): Map description
+            identna_resolution (int, optional): Mesh resolution (default: 100)
+            identna_effective_radius (float or "auto", optional): Effective radius. "auto" for automatic determination (default: 0.1)
+            identna_er_method (str, optional): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
+            identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
+
+        Returns:
+            dict: Dictionary containing:
+                - xyData: Coordinate data as NumPy array (each row is [x, y])
+                - mapNo: Map number
+                - shareUrl: Share URL for the map
+        """
+        # ndarray/DataFrame direct input: convert to a temporary CSV file
+        temp_csv_path = None
+        if not isinstance(files, (str, list)):
+            temp_csv_path = self._convert_inmemory_embedding(files)
+            if temp_csv_path is None:
+                return None
+            files = [temp_csv_path]
+
+        # File existence and format check (accept both string and list)
+        if isinstance(files, str):
+            files = [files]  # Convert single file to list
+
+        if not files or not isinstance(files, list):
+            print("Error: files must be a file path (string) or list of file paths")
+            return None
+
+        files_to_upload = []
+        for file_path in files:
+            if not os.path.exists(file_path):
+                print(f"Error: File not found: {file_path}")
+                return None
+
+            # File format check (.csv only)
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext != '.csv':
+                print(f"Error: Unsupported file format: {ext}. Only .csv files are supported.")
+                return None
+
+            files_to_upload.append(('files', open(file_path, 'rb')))
+
+        try:
+            # Prepare form data
+            form_data = {
+                'label': label or '',
+                'tag': tag or '',
+                'description': description or ''
+            }
+
+            # 前処理オプション: 明示指定された場合のみ送信（サーバー側デフォルトに委ねる）
+            if l2_normalization is not None:
+                form_data['l2_normalization'] = 'true' if bool(l2_normalization) else 'false'
+            if id_columns is not None:
+                form_data['id_columns'] = str(int(id_columns))
+
+            # Add identna parameters
+            identna_params = {}
+            if identna_resolution is not None:
+                identna_params['resolution'] = int(identna_resolution)
+            if identna_effective_radius is not None:
+                identna_params['effectiveRadius'] = identna_effective_radius if identna_effective_radius == 'auto' else float(identna_effective_radius)
+            if identna_er_method is not None:
+                identna_params['erMethod'] = identna_er_method
+            if identna_knn_k is not None:
+                identna_params['knnK'] = int(identna_knn_k)
+            if identna_params:
+                form_data['identna_params'] = json.dumps(identna_params)
+
+            # Send as multipart/form-data to new basemap_embedding endpoint
+            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
+            response = requests.post(
+                f"{API_URL}/data/basemap_embedding",
+                files=files_to_upload,
+                data=form_data,
+                headers=headers
+            )
+
+            if response.status_code == 200:
+                response_data = response.json()
+                baseXyData = response_data['resdata']['baseXyData']
+                self.mapNo = response_data['resdata']['mapNo']
+                self.shareUrl = response_data.get('shareUrl')  # Save share URL
+
+                np_array = np.array(baseXyData)  # Convert baseXyData to NumPy array
+
+                # Return unified structure similar to addplot methods
+                return {
+                    'xyData': np_array,
+                    'mapNo': self.mapNo,
+                    'shareUrl': self.shareUrl
+                }
+            else:
+                try:
+                    error_message = response.json().get('message', 'Unknown error')
+                except:
+                    error_message = f"HTTP {response.status_code}: {response.text}"
+                print(f"Embedding basemap creation failed. Server responded with error: {error_message}")
+                return None
+
+        except requests.exceptions.RequestException as e:
+            print(f"Network error during embedding CSV upload: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"Error processing embedding basemap file: {str(e)}")
+            return None
+        finally:
+            # Ensure file handles are closed
+            for _, file_handle in files_to_upload:
+                try:
+                    file_handle.close()
+                except:
+                    pass
+            # Remove the temporary CSV file created from ndarray/DataFrame input
+            if temp_csv_path is not None:
+                try:
+                    os.remove(temp_csv_path)
                 except:
                     pass
 
@@ -1544,4 +1859,52 @@ class toorPIA:
         type_option_str = ",".join(type_options) if type_options else ""
         
         return weight_option_str, type_option_str
+
+    def _convert_inmemory_embedding(self, data):
+        """
+        Convert in-memory embedding data (2D numpy.ndarray or pandas.DataFrame)
+        into a temporary CSV file for multipart upload (embedding methods only).
+
+        An ndarray is written WITHOUT a header so that the server auto-generates
+        consistent dimension names, keeping base and add column names
+        aligned. A DataFrame is written WITH its header.
+
+        Args:
+            data (numpy.ndarray or pandas.DataFrame): Embedding data (rows=samples, columns=dimensions)
+
+        Returns:
+            str: Path of the temporary CSV file, or None on failure.
+                 The caller is responsible for removing the file.
+        """
+        temp_path = None
+        try:
+            import tempfile
+            import pandas as pd  # pandasはndarray/DataFrame入力時のみ必要
+
+            if isinstance(data, np.ndarray):
+                if data.ndim != 2:
+                    print("Error: ndarray input must be 2-dimensional (rows=samples, columns=dimensions)")
+                    return None
+                fd, temp_path = tempfile.mkstemp(suffix='.csv')
+                os.close(fd)
+                # headerless output: the server auto-generates the dimension names,
+                # which keeps headerless add data compatible with the basemap's column names
+                pd.DataFrame(data).to_csv(temp_path, index=False, header=False)
+                return temp_path
+            elif isinstance(data, pd.DataFrame):
+                fd, temp_path = tempfile.mkstemp(suffix='.csv')
+                os.close(fd)
+                data.to_csv(temp_path, index=False)  # DataFrame keeps its own header
+                return temp_path
+            else:
+                print("Error: files must be a file path (string), list of file paths, 2D numpy.ndarray, or pandas.DataFrame")
+                return None
+        except Exception as e:
+            print(f"Error converting in-memory embedding data to CSV: {str(e)}")
+            if temp_path is not None:
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass
+            return None
 
