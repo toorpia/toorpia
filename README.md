@@ -143,6 +143,51 @@ else:
 print(f"🌐 View Analysis: {test_result['shareUrl']}")
 ```
 
+## Embedding Data Analysis
+
+### Step 1: Create Base Map from Embedding Vectors
+
+```python
+import numpy as np
+
+# Direct ndarray input (rows = samples, columns = embedding dimensions)
+embeddings = np.load("sentence_embeddings.npy")  # e.g. shape (1000, 768)
+result = client.basemap_embedding(
+    embeddings,
+    label="Sentence Embedding Baseline",
+    tag="NLP Monitoring"
+)
+
+# Or use a CSV file (leading non-numeric columns are auto-detected as ID columns)
+result = client.basemap_embedding("image_features.csv")
+
+print(f"✅ Embedding base map created!")
+print(f"Map Number: {result['mapNo']}")
+print(f"🌐 View Map: {result['shareUrl']}")
+```
+
+**Tip:** Each vector is L2-normalized by default. For embeddings whose norm carries information, pass `l2_normalization=False`. Note that `vector_normalization` is not applicable to embedding maps — the engine always uses the euclidean distance mode.
+
+### Step 2: Detect Embedding Anomalies
+
+```python
+# Test new embeddings against the latest basemap
+# (preprocessing options are inherited from the basemap automatically)
+new_embeddings = np.load("new_embeddings.npy")
+test_result = client.addplot_embedding(new_embeddings)
+
+# Or test against a specific previous basemap
+test_result = client.addplot_embedding(new_embeddings, mapNo=789)
+
+if test_result['abnormalityStatus'] == 'abnormal':
+    print(f"🚨 Embedding anomaly detected!")
+    print(f"Abnormality Score: {test_result['abnormalityScore']:.3f}")
+else:
+    print(f"✅ Embedding pattern is normal")
+
+print(f"🌐 View Analysis: {test_result['shareUrl']}")
+```
+
 ## Visual Analysis with Map Inspector
 
 All basemap and addplot operations generate interactive visualizations accessible through share URLs.
@@ -278,6 +323,7 @@ print(f"Anomaly status: {addplot_result['abnormalityStatus']}")
 - **DataFrame Processing**: Direct processing of pandas/numpy data
 - **CSV Direct Processing**: Memory-efficient processing of large files
 - **Audio Processing**: FFT feature extraction from WAV/CSV files
+- **Embedding Processing**: Direct analysis of embedding vectors (CSV/numpy/pandas)
 
 ### Anomaly Detection
 - Learning normal data patterns

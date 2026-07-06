@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='toorpia',
-    version='1.1.1',
+    version='1.2.0',
     author='toor Inc.',
     author_email='takaeda@toor.jpn.com',
     description='API Frontend libraries of toorpia',
