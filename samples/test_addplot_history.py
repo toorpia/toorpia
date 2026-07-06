@@ -62,7 +62,7 @@ def main():
         add_result_1 = client.addplot(add_data)
         print(f"First add plot created. Add Plot No: {client.currentAddPlotNo}")
         print(f"Share URL: {client.shareUrl}")
-        print(f"Result shape: {add_result_1.shape}\n")
+        print(f"Result shape: {add_result_1['xyData'].shape}\n")
     except Exception as e:
         print(f"Error creating first add plot: {str(e)}")
         return 1
@@ -73,7 +73,7 @@ def main():
         add_result_2 = client.addplot(add_data)
         print(f"Second add plot created. Add Plot No: {client.currentAddPlotNo}")
         print(f"Share URL: {client.shareUrl}")
-        print(f"Result shape: {add_result_2.shape}\n")
+        print(f"Result shape: {add_result_2['xyData'].shape}\n")
     except Exception as e:
         print(f"Error creating second add plot: {str(e)}")
         return 1
