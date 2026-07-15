@@ -159,6 +159,7 @@ result = client.basemap_embedding(
 )
 
 # Or use a CSV file (leading non-numeric columns are auto-detected as ID columns)
+# gzip-compressed CSV (.csv.gz) is also accepted
 result = client.basemap_embedding("image_features.csv")
 
 print(f"✅ Embedding base map created!")
@@ -167,6 +168,8 @@ print(f"🌐 View Map: {result['shareUrl']}")
 ```
 
 **Tip:** Each vector is L2-normalized by default. For embeddings whose norm carries information, pass `l2_normalization=False`. Note that `vector_normalization` is not applicable to embedding maps — the engine always uses the euclidean distance mode.
+
+**Upload size:** In-memory input (ndarray/DataFrame) is serialized with 7 significant digits and gzip-compressed before upload, shrinking the transfer to roughly 1/4 of a full-precision plain CSV (the rounding is far below the map engine's own run-to-run variability). On servers without `.csv.gz` support the client transparently falls back to an uncompressed upload.
 
 ### Step 2: Detect Embedding Anomalies
 

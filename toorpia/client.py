@@ -1006,9 +1006,10 @@ class toorPIA:
         here. This guarantees that basemap and addplot use identical
         preprocessing and consistent dimension names.
 
-        Accepts CSV file path(s) or in-memory embedding data (2D numpy.ndarray
-        or pandas.DataFrame), with the same CSV conversion conventions as
-        basemap_embedding().
+        Accepts CSV file path(s) (.csv or gzip-compressed .csv.gz) or in-memory
+        embedding data (2D numpy.ndarray or pandas.DataFrame), with the same
+        CSV conversion and upload conventions as basemap_embedding()
+        (%.7g serialization + gzip compression, with uncompressed fallback).
 
         Args:
             files (str, list, numpy.ndarray or pandas.DataFrame): CSV file path(s) or in-memory embedding data
@@ -1056,19 +1057,17 @@ class toorPIA:
             print("Error: files must be a file path (string) or list of file paths")
             return None
 
-        files_to_upload = []
         for file_path in files:
             if not os.path.exists(file_path):
                 print(f"Error: File not found: {file_path}")
                 return None
 
-            # File format check (.csv only)
-            ext = os.path.splitext(file_path)[1].lower()
-            if ext != '.csv':
-                print(f"Error: Unsupported file format: {ext}. Only .csv files are supported.")
+            # File format check (.csv / .csv.gz)
+            lower_path = file_path.lower()
+            if not (lower_path.endswith('.csv') or lower_path.endswith('.csv.gz')):
+                print(f"Error: Unsupported file format: {os.path.splitext(file_path)[1]}. "
+                      "Only .csv / .csv.gz files are supported.")
                 return None
-
-            files_to_upload.append(('files', open(file_path, 'rb')))
 
         try:
             # Prepare identna parameters
@@ -1098,13 +1097,9 @@ class toorPIA:
             if identna_params:
                 form_data['identna_options'] = json.dumps(identna_params)
 
-            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
-            response = requests.post(
-                f"{API_URL}/data/addplot_embedding",
-                files=files_to_upload,
-                data=form_data,
-                headers=headers
-            )
+            # Send as multipart/form-data to the addplot_embedding endpoint
+            # (falls back to uncompressed upload on servers without .csv.gz support)
+            response = self._post_embedding_files('/data/addplot_embedding', files, form_data)
 
             if response.status_code == 200:
                 response_data = response.json()
@@ -1147,12 +1142,6 @@ class toorPIA:
             print(f"Error processing embedding addplot: {str(e)}")
             return None
         finally:
-            # Ensure file handles are closed
-            for _, file_handle in files_to_upload:
-                try:
-                    file_handle.close()
-                except:
-                    pass
             # Remove the temporary CSV file created from ndarray/DataFrame input
             if temp_csv_path is not None:
                 try:
@@ -1303,12 +1292,17 @@ class toorPIA:
         """
         Create base map from embedding vectors with unified return structure
 
-        Accepts CSV file path(s) or in-memory embedding data (2D numpy.ndarray
-        or pandas.DataFrame). Input rows are samples and columns are embedding
-        dimensions; header rows are auto-detected and leading non-numeric
-        columns are auto-detected as ID/label columns. An ndarray is uploaded
-        as a headerless CSV so that dimension names are auto-generated
-        consistently between basemap and addplot; a DataFrame keeps its header.
+        Accepts CSV file path(s) (.csv or gzip-compressed .csv.gz) or in-memory
+        embedding data (2D numpy.ndarray or pandas.DataFrame). Input rows are
+        samples and columns are embedding dimensions; header rows are
+        auto-detected and leading non-numeric columns are auto-detected as
+        ID/label columns. An ndarray is uploaded as a headerless CSV so that
+        dimension names are auto-generated consistently between basemap and
+        addplot; a DataFrame keeps its header. In-memory data is serialized
+        with 7 significant digits (%.7g) and gzip-compressed for upload, which
+        shrinks the transfer to roughly 1/4 of a full-precision plain CSV; on
+        servers without .csv.gz support the upload transparently falls back to
+        uncompressed CSV.
 
         Note:
             vector_normalization is not applicable to embedding maps (the
@@ -1348,19 +1342,17 @@ class toorPIA:
             print("Error: files must be a file path (string) or list of file paths")
             return None
 
-        files_to_upload = []
         for file_path in files:
             if not os.path.exists(file_path):
                 print(f"Error: File not found: {file_path}")
                 return None
 
-            # File format check (.csv only)
-            ext = os.path.splitext(file_path)[1].lower()
-            if ext != '.csv':
-                print(f"Error: Unsupported file format: {ext}. Only .csv files are supported.")
+            # File format check (.csv / .csv.gz)
+            lower_path = file_path.lower()
+            if not (lower_path.endswith('.csv') or lower_path.endswith('.csv.gz')):
+                print(f"Error: Unsupported file format: {os.path.splitext(file_path)[1]}. "
+                      "Only .csv / .csv.gz files are supported.")
                 return None
-
-            files_to_upload.append(('files', open(file_path, 'rb')))
 
         try:
             # Prepare form data
@@ -1389,14 +1381,9 @@ class toorPIA:
             if identna_params:
                 form_data['identna_params'] = json.dumps(identna_params)
 
-            # Send as multipart/form-data to new basemap_embedding endpoint
-            headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
-            response = requests.post(
-                f"{API_URL}/data/basemap_embedding",
-                files=files_to_upload,
-                data=form_data,
-                headers=headers
-            )
+            # Send as multipart/form-data to the basemap_embedding endpoint
+            # (falls back to uncompressed upload on servers without .csv.gz support)
+            response = self._post_embedding_files('/data/basemap_embedding', files, form_data)
 
             if response.status_code == 200:
                 response_data = response.json()
@@ -1427,12 +1414,6 @@ class toorPIA:
             print(f"Error processing embedding basemap file: {str(e)}")
             return None
         finally:
-            # Ensure file handles are closed
-            for _, file_handle in files_to_upload:
-                try:
-                    file_handle.close()
-                except:
-                    pass
             # Remove the temporary CSV file created from ndarray/DataFrame input
             if temp_csv_path is not None:
                 try:
@@ -1863,17 +1844,25 @@ class toorPIA:
     def _convert_inmemory_embedding(self, data):
         """
         Convert in-memory embedding data (2D numpy.ndarray or pandas.DataFrame)
-        into a temporary CSV file for multipart upload (embedding methods only).
+        into a temporary gzip-compressed CSV file (.csv.gz) for multipart upload
+        (embedding methods only).
 
         An ndarray is written WITHOUT a header so that the server auto-generates
         consistent dimension names, keeping base and add column names
         aligned. A DataFrame is written WITH its header.
 
+        Float values are serialized with the ``%.7g`` format (7 significant
+        digits, on par with float32 precision) instead of the full float64
+        repr, which roughly halves the CSV size. The map engine's run-to-run
+        variability is far larger than this rounding, so the resulting
+        coordinates are unaffected. gzip (level 6) further shrinks the numeric
+        CSV to roughly 1/2-1/4, reducing upload time accordingly.
+
         Args:
             data (numpy.ndarray or pandas.DataFrame): Embedding data (rows=samples, columns=dimensions)
 
         Returns:
-            str: Path of the temporary CSV file, or None on failure.
+            str: Path of the temporary .csv.gz file, or None on failure.
                  The caller is responsible for removing the file.
         """
         temp_path = None
@@ -1881,20 +1870,24 @@ class toorPIA:
             import tempfile
             import pandas as pd  # pandasはndarray/DataFrame入力時のみ必要
 
+            compression = {'method': 'gzip', 'compresslevel': 6}
             if isinstance(data, np.ndarray):
                 if data.ndim != 2:
                     print("Error: ndarray input must be 2-dimensional (rows=samples, columns=dimensions)")
                     return None
-                fd, temp_path = tempfile.mkstemp(suffix='.csv')
+                fd, temp_path = tempfile.mkstemp(suffix='.csv.gz')
                 os.close(fd)
                 # headerless output: the server auto-generates the dimension names,
                 # which keeps headerless add data compatible with the basemap's column names
-                pd.DataFrame(data).to_csv(temp_path, index=False, header=False)
+                pd.DataFrame(data).to_csv(temp_path, index=False, header=False,
+                                          float_format='%.7g', compression=compression)
                 return temp_path
             elif isinstance(data, pd.DataFrame):
-                fd, temp_path = tempfile.mkstemp(suffix='.csv')
+                fd, temp_path = tempfile.mkstemp(suffix='.csv.gz')
                 os.close(fd)
-                data.to_csv(temp_path, index=False)  # DataFrame keeps its own header
+                # DataFrame keeps its own header
+                data.to_csv(temp_path, index=False,
+                            float_format='%.7g', compression=compression)
                 return temp_path
             else:
                 print("Error: files must be a file path (string), list of file paths, 2D numpy.ndarray, or pandas.DataFrame")
@@ -1907,4 +1900,68 @@ class toorPIA:
                 except:
                     pass
             return None
+
+    def _post_embedding_files(self, endpoint, file_paths, form_data):
+        """
+        POST embedding CSV files (.csv / .csv.gz) to an embedding endpoint as
+        multipart/form-data.
+
+        Servers that do not yet accept gzip-compressed CSV reject ``.csv.gz``
+        uploads with 415 UNSUPPORTED_FILE_TYPE; in that case the files are
+        transparently decompressed and re-sent uncompressed, so the client
+        stays compatible with older backends.
+
+        Args:
+            endpoint (str): Endpoint path (e.g. "/data/basemap_embedding")
+            file_paths (list): Paths of the CSV files to upload
+            form_data (dict): Additional form fields
+
+        Returns:
+            requests.Response: The server response (of the retry, if one occurred)
+        """
+        headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
+
+        def _post(paths):
+            handles = [('files', open(p, 'rb')) for p in paths]
+            try:
+                return requests.post(f"{API_URL}{endpoint}", files=handles,
+                                     data=form_data, headers=headers)
+            finally:
+                for _, handle in handles:
+                    try:
+                        handle.close()
+                    except:
+                        pass
+
+        response = _post(file_paths)
+
+        has_gzip = any(p.lower().endswith('.csv.gz') for p in file_paths)
+        if has_gzip and response.status_code == 415:
+            # サーバーが .csv.gz 未対応（gzip対応前のバージョン）: 展開して再送する
+            import gzip
+            import shutil
+            import tempfile
+
+            print("Note: server does not accept gzip-compressed CSV; retrying with uncompressed upload.")
+            fallback_paths, fallback_temps = [], []
+            try:
+                for p in file_paths:
+                    if p.lower().endswith('.csv.gz'):
+                        fd, tmp = tempfile.mkstemp(suffix='.csv')
+                        os.close(fd)
+                        fallback_temps.append(tmp)
+                        with gzip.open(p, 'rb') as src, open(tmp, 'wb') as dst:
+                            shutil.copyfileobj(src, dst)
+                        fallback_paths.append(tmp)
+                    else:
+                        fallback_paths.append(p)
+                response = _post(fallback_paths)
+            finally:
+                for tmp in fallback_temps:
+                    try:
+                        os.remove(tmp)
+                    except:
+                        pass
+
+        return response
 
