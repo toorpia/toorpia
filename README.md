@@ -354,15 +354,21 @@ export TOORPIA_API_KEY='your-api-key'
 export TOORPIA_API_URL='http://your-server:3000'
 ```
 
-### MCP Server for Claude Desktop
+### MCP Server (Claude Desktop / Claude Code / Cursor)
 
-> ⚠️ **Work In Progress** - This feature is currently under development and may not work as expected.
+AI clients can operate toorPIA directly through the MCP server [`@toorpia/mcp`](https://www.npmjs.com/package/@toorpia/mcp), specialized for embedding analysis (preview, basemap creation, anomaly detection, map listing). Add to your client's MCP configuration:
 
-Integration with Claude Desktop enables natural language toorPIA operations:
-
-```bash
-cd mcp && npm install && npm run build
+```json
+{
+  "mcpServers": {
+    "toorpia": {
+      "command": "npx",
+      "args": ["-y", "@toorpia/mcp"],
+      "env": { "TOORPIA_API_KEY": "your-api-key" }
+    }
+  }
+}
 ```
 
-For details, see [mcp/README.md](./mcp/README.md).
+For setup and tool details, see [mcp/README.md](./mcp/README.md).
 
