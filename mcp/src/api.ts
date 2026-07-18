@@ -281,16 +281,19 @@ export class ToorpiaApi {
     detabn?: DetabnParams;
   }): Promise<AddplotResult> {
     const detabn = payload.detabn ?? {};
+    // threshold is only sent when explicitly requested: when omitted, the
+    // server lets detabn derive it from its coverage default (0.90), which is
+    // smarter than a fixed value. (The Python client always sends 0, which
+    // disables that auto-derivation — do not copy that behavior.)
+    const detabnOptions: Record<string, unknown> = {
+      maxWindow: Math.trunc(detabn.maxWindow ?? 5),
+      rateThreshold: detabn.rateThreshold ?? 1.0,
+      printScore: true,
+    };
+    if (detabn.threshold !== undefined) detabnOptions.threshold = detabn.threshold;
     const fields: Record<string, string> = {
       mapNo: String(payload.mapNo),
-      // Same defaults as the Python client; threshold is kept as a float
-      // (values like 0.1 are meaningful).
-      detabn_options: JSON.stringify({
-        maxWindow: Math.trunc(detabn.maxWindow ?? 5),
-        rateThreshold: detabn.rateThreshold ?? 1.0,
-        threshold: detabn.threshold ?? 0,
-        printScore: true,
-      }),
+      detabn_options: JSON.stringify(detabnOptions),
     };
     const identna = this.identnaFields(payload.identna ?? {});
     if (identna.identna_params) fields.identna_options = identna.identna_params;

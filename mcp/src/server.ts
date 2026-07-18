@@ -153,7 +153,7 @@ export async function startServer(): Promise<void> {
         detabn_rate_threshold: z.number().optional()
           .describe("Advanced: abnormality-rate threshold in (0,1] (server default 1.0 = all points in the window must be outside the normal area)."),
         detabn_threshold: z.number().optional()
-          .describe("Advanced: normal-area density threshold (server default 0). A point is normal when its normal-area value exceeds this."),
+          .describe("Advanced: normal-area density threshold; a point is normal when its normal-area value exceeds this. When omitted (recommended), the server auto-derives it so the normal area covers ~90% of the basemap."),
         ...identnaShape,
       },
     },
