@@ -532,7 +532,7 @@ result = client.addplot(
     df_add,
     detabn_max_window=3,        # Maximum window size (default: 5)
     detabn_rate_threshold=0.5,  # Abnormality rate threshold (default: 1.0)
-    detabn_threshold=0.1,       # Normal area threshold (default: 0)
+    detabn_threshold=0.1,       # Normal area threshold (default: omitted → auto-derived by the server)
     detabn_print_score=True     # Print score information (default: True)
 )
 
@@ -550,7 +550,7 @@ print(f"XY Data: {result['xyData'].shape}")                  # NumPy array of co
 **detabn Parameters:**
 - `detabn_max_window`: Maximum number of sequential data points used for abnormality rate calculation
 - `detabn_rate_threshold`: Lower threshold for abnormality rate (0.0 < rate <= 1.0). If rate >= threshold, data is considered abnormal
-- `detabn_threshold`: Threshold for relative normal area value. If value > threshold, the point is considered normal
+- `detabn_threshold`: Threshold for relative normal area value. If value > threshold, the point is considered normal. When omitted, the server auto-derives the threshold so that the normal area covers ~90% of the basemap (detabn's coverage default), which is recommended
 - `detabn_print_score`: Whether to include detailed score information in the analysis
 
 **Return Value Enhancement:**
@@ -869,7 +869,7 @@ Abnormality detection parameters:
 
 - **detabn_max_window** (int, default=5): Maximum number of sequential data points used for abnormality rate calculation
 - **detabn_rate_threshold** (float, default=1.0): Lower threshold for abnormality rate (0.0 < rate <= 1.0). If rate >= threshold, data is considered abnormal
-- **detabn_threshold** (int/float, default=0): Threshold for relative normal area value. If value > threshold, the point is considered normal
+- **detabn_threshold** (float, optional): Threshold for relative normal area value. If value > threshold, the point is considered normal. When omitted (recommended), the server auto-derives the threshold from detabn's coverage default (0.90) so the normal area covers ~90% of the basemap. Note: passing an explicit value (including 0) disables this auto-derivation
 - **detabn_print_score** (bool, default=True): Whether to include detailed score information in the analysis
 
 ### Embedding Preprocessing Parameters

@@ -478,7 +478,7 @@ class toorPIA:
                         identna_er_method=None, identna_knn_k=None,
                         # detabn parameters
                         detabn_max_window=5, detabn_rate_threshold=1.0,
-                        detabn_threshold=0, detabn_print_score=True,
+                        detabn_threshold=None, detabn_print_score=True,
                         # Legacy mkfftSeg parameters (deprecated - for backward compatibility warnings)
                         mkfftseg_di=None, mkfftseg_hp=None, mkfftseg_lp=None, 
                         mkfftseg_nm=None, mkfftseg_ol=None, mkfftseg_sr=None,
@@ -499,7 +499,7 @@ class toorPIA:
             identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
             detabn_max_window (int): Maximum window size for abnormality detection
             detabn_rate_threshold (float): Rate threshold for abnormality detection
-            detabn_threshold (int): Threshold value for abnormality detection
+            detabn_threshold (float, optional): Threshold for relative normal area value. When omitted (None), the server auto-derives it from detabn's coverage default (0.90)
             detabn_print_score (bool): Whether to print abnormality score
 
         Returns:
@@ -571,12 +571,15 @@ class toorPIA:
                 identna_params['knnK'] = int(identna_knn_k)
             
             # Prepare detabn parameters
+            # threshold は明示指定時のみ送信する。省略時はサーバ側で detabn の
+            # -coverage デフォルト(0.90)から自動導出される（0 を送るとそれが無効になる）
             detabn_params = {
                 'maxWindow': int(detabn_max_window),
                 'rateThreshold': float(detabn_rate_threshold),
-                'threshold': int(detabn_threshold),
                 'printScore': bool(detabn_print_score)
             }
+            if detabn_threshold is not None:
+                detabn_params['threshold'] = float(detabn_threshold)
             
             # Send as form-data
             form_data = {
@@ -849,7 +852,7 @@ class toorPIA:
                        identna_er_method=None, identna_knn_k=None,
                        # detabn parameters
                        detabn_max_window=5, detabn_rate_threshold=1.0,
-                       detabn_threshold=0, detabn_print_score=True):
+                       detabn_threshold=None, detabn_print_score=True):
         """
         Process CSV files for addplot (additional plot) analysis
         Uses the same CSV processing options as the base map (stored in database)
@@ -863,7 +866,7 @@ class toorPIA:
             identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
             detabn_max_window (int): Maximum window size for abnormality detection
             detabn_rate_threshold (float): Rate threshold for abnormality detection
-            detabn_threshold (int): Threshold value for abnormality detection
+            detabn_threshold (float, optional): Threshold for relative normal area value. When omitted (None), the server auto-derives it from detabn's coverage default (0.90)
             detabn_print_score (bool): Whether to print abnormality score
 
         Returns:
@@ -919,12 +922,15 @@ class toorPIA:
                 identna_params['knnK'] = int(identna_knn_k)
             
             # Prepare detabn parameters
+            # threshold は明示指定時のみ送信する。省略時はサーバ側で detabn の
+            # -coverage デフォルト(0.90)から自動導出される（0 を送るとそれが無効になる）
             detabn_params = {
                 'maxWindow': int(detabn_max_window),
                 'rateThreshold': float(detabn_rate_threshold),
-                'threshold': int(detabn_threshold),
                 'printScore': bool(detabn_print_score)
             }
+            if detabn_threshold is not None:
+                detabn_params['threshold'] = float(detabn_threshold)
             
             # Send as form-data
             form_data = {
@@ -997,7 +1003,7 @@ class toorPIA:
                          identna_er_method=None, identna_knn_k=None,
                          # detabn parameters
                          detabn_max_window=5, detabn_rate_threshold=1.0,
-                         detabn_threshold=0, detabn_print_score=True):
+                         detabn_threshold=None, detabn_print_score=True):
         """
         Process embedding data for addplot (additional plot) analysis
 
@@ -1020,7 +1026,7 @@ class toorPIA:
             identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
             detabn_max_window (int): Maximum window size for abnormality detection
             detabn_rate_threshold (float): Rate threshold for abnormality detection
-            detabn_threshold (int): Threshold value for abnormality detection
+            detabn_threshold (float, optional): Threshold for relative normal area value. When omitted (None), the server auto-derives it from detabn's coverage default (0.90)
             detabn_print_score (bool): Whether to print abnormality score
 
         Returns:
@@ -1082,12 +1088,15 @@ class toorPIA:
                 identna_params['knnK'] = int(identna_knn_k)
 
             # Prepare detabn parameters
+            # threshold は明示指定時のみ送信する。省略時はサーバ側で detabn の
+            # -coverage デフォルト(0.90)から自動導出される（0 を送るとそれが無効になる）
             detabn_params = {
                 'maxWindow': int(detabn_max_window),
                 'rateThreshold': float(detabn_rate_threshold),
-                'threshold': int(detabn_threshold),
                 'printScore': bool(detabn_print_score)
             }
+            if detabn_threshold is not None:
+                detabn_params['threshold'] = float(detabn_threshold)
 
             # Send as form-data
             form_data = {
