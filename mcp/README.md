@@ -1,398 +1,179 @@
-# toorPIA MCP Server
+# @toorpia/mcp — toorPIA MCP Server (Embedding Analysis)
 
-MCP (Model Context Protocol) server implementation providing comprehensive tools for toorPIA API integration.
+An [MCP](https://modelcontextprotocol.io/) server that lets AI clients (Claude Desktop, Claude Code, Cursor, …) analyze **embedding vectors** with the [toorPIA](https://toorpia.com/) API.
 
-## Architecture
+toorPIA is a dimensionality-reduction and anomaly-detection service built on an O(n) Laplacian-eigenmaps implementation. Unlike t-SNE/UMAP, results are **deterministic** (same input → same map) and new data can be **added to an existing map without recomputation**, so coordinates stay comparable over time. This makes it well suited for monitoring embedding drift, detecting anomalous batches against a learned baseline, and reproducible visual exploration of embedding spaces.
 
-Modular server implementation with separated concerns, evolved from monolithic single-file to structured architecture:
+The server runs locally on your machine (stdio transport), reads embedding CSV files from your local disk, and sends them to the toorPIA API using your personal API key. Uploads are gzip-compressed automatically. Full 2-D coordinates are never returned into the AI conversation — results come back as compact statistical summaries plus a `shareUrl` you can open in a browser for interactive inspection.
 
-```
-src/
-├─ server.ts                 # Main entry point (MCP server startup)
-├─ tools/
-│  ├─ common.ts             # Common tools (locate_file, detect_file_type, etc.)
-│  ├─ csv.ts                # CSV workflow (fit_transform, addplot, csv.*)
-│  └─ wav.ts                # WAV workflow (ENABLE_WAV controlled)
-├─ prompts/
-│  ├─ workflow_csv.ts       # CSV workflow guidance
-│  └─ workflow_wav.ts       # WAV workflow guidance
-├─ client/
-│  └─ toorpia.ts            # toorPIA API client
-└─ types.ts                 # Shared type definitions
-```
+## Tools
 
-## Quick Start
+| Tool | What it does |
+|---|---|
+| `preview_csv` | Inspect a local embedding CSV **without uploading**: rows, dimensions, header/ID-column detection, L2-norm statistics, sample rows. |
+| `create_basemap` | Upload baseline embeddings and build the 2-D reference map. Returns `mapNo`, `shareUrl`, and a distribution summary. |
+| `add_plot` | Project new embeddings onto an existing map and run anomaly detection. Returns abnormality status/score, a composite diagnostic (normal / warning / danger), and `shareUrl`. |
+| `list_maps` | List the maps that belong to your API key (newest first). |
 
-### Development Mode
-```bash
-npm run dev
-```
+### Input data format
 
-### Production Build
-```bash
-npm run build
-npm start
-```
+- `.csv` or gzip-compressed `.csv.gz`
+- Rows = samples, columns = embedding dimensions
+- An optional header row and leading non-numeric ID/label columns are auto-detected by the server
+- `add_plot` files must have exactly the same embedding dimensionality as the basemap (preprocessing is inherited from the basemap automatically)
 
-## Environment Configuration
+## Requirements
 
-Copy `.env.example` to `.env` and configure:
+- Node.js **18 or newer** (`node --version`)
+- A toorPIA API key (issued individually — contact your toorPIA representative)
 
-```bash
-# toorPIA API Configuration
-TOORPIA_API_KEY=your_api_key_here
-TOORPIA_API_URL=http://localhost:3000
-
-# Feature Control
-ENABLE_WAV=true
-```
-
-### Important: TOORPIA_API_KEY Setup
-
-**Required for CSV workflow Python script execution:**
-
-1. **Set as environment variable** (recommended):
-   ```bash
-   export TOORPIA_API_KEY="your_actual_api_key_here"
-   ```
-
-2. **Specify at MCP server startup**:
-   ```json
-   {
-     "env": {
-       "TOORPIA_API_KEY": "your_actual_api_key_here"
-     }
-   }
-   ```
-
-3. **Python environment prerequisites**:
-   - `python3` command available
-   - `pip install toorpia` package installed
-   - `TOORPIA_API_KEY` environment variable configured
-
-### ENABLE_WAV Control
-
-- `ENABLE_WAV=true` (default): WAV functionality enabled
-- `ENABLE_WAV=false`: WAV functionality disabled (NOT_IMPLEMENTED response)
-
-## Available Tools
-
-### New Common Tools
-
-#### locate_file
-File existence verification and absolute path resolution
-
-```json
-// Input
-{
-  "baseDir": "/path/to/base", // optional
-  "path": "relative/file.csv"
-}
-
-// Output (Success)
-{
-  "ok": true,
-  "absPath": "/path/to/base/relative/file.csv",
-  "exists": true
-}
-
-// Output (Error)
-{
-  "ok": false,
-  "code": "LOCATE_ERROR",
-  "reason": "Error details"
-}
-```
-
-#### detect_file_type
-File format detection (CSV/WAV/unknown)
-
-```json
-// Input
-{
-  "path": "/path/to/file.wav"
-}
-
-// Output (WAV)
-{
-  "ok": true,
-  "kind": "wav",
-  "reason": "Detected WAV by RIFF header"
-}
-
-// Output (CSV)
-{
-  "ok": true,
-  "kind": "csv", 
-  "reason": "Detected CSV by extension"
-}
-
-// Output (Unknown)
-{
-  "ok": true,
-  "kind": "unknown",
-  "reason": "Unknown file type with extension: .txt"
-}
-```
-
-### Legacy Tools (Full API Compatibility Maintained)
-
-The following 10 tools maintain complete compatibility:
-
-- `fit_transform`: Create base map from CSV/DataFrame data
-- `addplot`: Add data to existing maps
-- `fit_transform_waveform`: Create base map from WAV files
-- `addplot_waveform`: Add WAV files to maps
-- `list_map`: List all maps
-- `list_addplots`: List addplots for a map
-- `get_addplot`: Get addplot details
-- `get_addplot_features`: Get feature data
-- `export_map`: Export map data
-- `import_map`: Import map data
-- `whoami`: Authentication verification
-
-## Unified Error Response
-
-All tools use unified error format:
-
-```json
-{
-  "ok": false,
-  "code": "ERROR_CODE",
-  "reason": "Detailed error description"
-}
-```
-
-## Logging Output
-
-Each tool call generates log output:
-```
-[TOOL] tool_name: OK (123ms)
-[TOOL] tool_name: ERROR:AUTH_FAILED (45ms)
-```
-
-## MCP Client Configuration Examples
+## Setup
 
 ### Claude Desktop
-`mcp_settings.json`:
+
+Edit the config file (macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`, Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
+
 ```json
 {
   "mcpServers": {
-    "toorpia-mcp": {
-      "command": "node",
-      "args": ["./dist/server.js"],
-      "cwd": "/path/to/toorpia-mcp",
+    "toorpia": {
+      "command": "npx",
+      "args": ["-y", "@toorpia/mcp"],
       "env": {
-        "TOORPIA_API_KEY": "your_key_here",
-        "TOORPIA_API_URL": "http://localhost:3000",
-        "ENABLE_WAV": "true"
+        "TOORPIA_API_KEY": "your-api-key-here"
       }
     }
   }
 }
 ```
 
-### MCP Inspector
+Restart Claude Desktop afterwards. The toorPIA tools appear in the tools menu.
+
+### Claude Code
+
 ```bash
-node ./dist/server.js
+claude mcp add toorpia -e TOORPIA_API_KEY=your-api-key-here -- npx -y @toorpia/mcp
 ```
 
-## CSV Workflow
-
-Complete interactive CSV data processing pipeline:
-
-### csv.preview
-CSV file automatic type inference and schema initialization
+Or add to `.mcp.json` in your project (or `~/.claude.json` for all projects):
 
 ```json
-// Input
 {
-  "path": "/absolute/path/to/file.csv",
-  "nRows": 5  // optional, default: 5
-}
-
-// Output
-{
-  "ok": true,
-  "filePath": "/absolute/path/to/file.csv",
-  "rowCount": 20,
-  "columns": [
-    {
-      "name": "timestamp",
-      "type": "datetime",
-      "weight": 0.8,
-      "use": true
-    },
-    {
-      "name": "temperature", 
-      "type": "number",
-      "weight": 1.0,
-      "use": true
-    }
-  ],
-  "sampleData": [
-    ["2024-01-01T10:00:00", 23.5],
-    ["2024-01-01T10:05:00", 23.7]
-  ]
-}
-```
-
-### csv.apply_schema_patch
-Column schema adjustment (type, weight, usage flags)
-
-```json
-// Input
-{
-  "path": "/absolute/path/to/file.csv",
-  "patches": [
-    {
-      "columnName": "sensor_id",
-      "updates": {
-        "type": "string",
-        "weight": 0.0,
-        "use": false,
-        "description": "Exclude sensor ID from analysis"
+  "mcpServers": {
+    "toorpia": {
+      "command": "npx",
+      "args": ["-y", "@toorpia/mcp"],
+      "env": {
+        "TOORPIA_API_KEY": "your-api-key-here"
       }
     }
-  ]
-}
-
-// Output  
-{
-  "ok": true,
-  "updatedColumns": ["sensor_id"]
-}
-```
-
-### csv.get_schema
-Current schema state verification
-
-```json
-// Input
-{
-  "path": "/absolute/path/to/file.csv"
-}
-
-// Output
-{
-  "ok": true,
-  "schema": {
-    "filePath": "/absolute/path/to/file.csv",
-    "columns": [...],
-    "rowCount": 20,
-    "sampleData": [...],
-    "description": "CSV file with 20 rows and 7 columns"
   }
 }
 ```
 
-### csv.generate_runner
-toorPIA-compliant Python script generation
+### Cursor
+
+Add to `.cursor/mcp.json` in your project (or `~/.cursor/mcp.json` globally):
 
 ```json
-// Input
 {
-  "path": "/absolute/path/to/file.csv",
-  "outputPath": "/path/to/script.py"  // optional
-}
-
-// Output
-{
-  "ok": true,
-  "script": "#!/usr/bin/env python3\n# Auto-generated script...",
-  "scriptPath": "/path/to/script.py"
+  "mcpServers": {
+    "toorpia": {
+      "command": "npx",
+      "args": ["-y", "@toorpia/mcp"],
+      "env": {
+        "TOORPIA_API_KEY": "your-api-key-here"
+      }
+    }
+  }
 }
 ```
 
-### csv.run_runner
-Synchronous Python script execution
+### Environment variables
 
-```json
-// Input
-{
-  "scriptContent": "import pandas as pd\nfrom toorpia import toorPIA\n..."
-}
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `TOORPIA_API_KEY` | yes | — | Your personal toorPIA API key. |
+| `TOORPIA_API_URL` | no | `https://api.toorpia.com` | toorPIA API endpoint. Set this for on-premise installations. |
 
-// Output (Success)
-{
-  "ok": true,
-  "stdout": "Loading CSV data...\nAnalysis complete!",
-  "stderr": "",
-  "exitCode": 0
-}
+## Example session
 
-// Output (Error)
-{
-  "ok": false,
-  "code": "RUNTIME_ERROR",
-  "reason": "Python script failed with exit code 1: ModuleNotFoundError: No module named 'toorpia'"
-}
-```
+> **User:** I have sentence embeddings of last month's support tickets in `/data/tickets_baseline.csv`. Map them, then check whether this week's tickets in `/data/tickets_w29.csv` look unusual.
 
-### Complete Workflow Example
+The AI client will typically:
 
-Using testdata/sensor_log.csv:
+1. `preview_csv` both files (confirm same dimensionality, decide preprocessing)
+2. `create_basemap` with the baseline file → returns `mapNo` + `shareUrl`
+3. `add_plot` with the new file → returns abnormality verdict + `shareUrl`
+4. Explain the verdict and hand you the `shareUrl` links for visual inspection
+
+## Verifying the server with MCP Inspector
+
+To check connectivity independently of any AI client:
 
 ```bash
-# 1. File verification
-locate_file -> get absolute path
-detect_file_type -> confirm CSV format
+cd mcp            # this directory (when working from the repository)
+npm install && npm run build
 
-# 2. Schema initialization  
-csv.preview -> automatic type inference, display sample data
-
-# 3. Schema adjustment (optional)
-csv.apply_schema_patch -> exclude unnecessary columns, adjust weights
-
-# 4. Python script generation
-csv.generate_runner -> auto-configure DROP_COLUMNS, toorPIA invocation
-
-# 5. Execution
-csv.run_runner -> execute analysis, retrieve results
+npx @modelcontextprotocol/inspector \
+  -e TOORPIA_API_KEY=your-api-key-here \
+  node dist/index.js
 ```
 
-### Error Codes
+Then in the Inspector UI that opens in your browser:
 
-CSV workflow-specific errors:
-- `NOT_FOUND`: File or data not found
-- `SCHEMA_NOT_INITIALIZED`: Schema not initialized (csv.preview required)
-- `SCHEMA_NOT_READY`: Schema preparation incomplete
-- `UNKNOWN_COLUMN`: Specified column does not exist
-- `RUNTIME_ERROR`: Runtime error
-- `PYTHON_NOT_FOUND`: python3 command not found
+1. Press **Connect** — the server banner should appear in the console (`[toorpia-mcp] server started`)
+2. Open **Tools → List Tools** — the four tools should be listed
+3. Call `preview_csv` with `{"path": "<absolute path>/testdata/embedding_sample.csv"}` — returns row/dimension statistics without touching the API
+4. Call `list_maps` with `{}` — verifies authentication against the API (`AUTH_FAILED` here means the API key is wrong)
 
-## Implementation Status
+For the published package, replace `node dist/index.js` with `npx -y @toorpia/mcp`.
 
-### ✅ Completed
-- **File Split Refactoring**: From monolithic to structured architecture
-- **API Compatibility**: Complete compatibility for existing 10 tools
-- **New Tools**: locate_file, detect_file_type
-- **CSV Workflow**: Complete pipeline: preview→adjustment→generation→execution
-  - csv.preview: Automatic type inference and schema initialization
-  - csv.apply_schema_patch: Interactive schema adjustment
-  - csv.get_schema: Schema state verification
-  - csv.generate_runner: toorPIA-compliant script generation
-  - csv.run_runner: Python synchronous execution
-- **Unified Error Response**: {ok, code, reason} format
-- **Logging Functionality**: [TOOL] name: status (duration)ms
-- **ENABLE_WAV Control**: Environment variable feature control
-- **Prompt Registration**: Complete workflow guidance
+## Troubleshooting
 
-### 🚧 Future Implementation (Upcoming PRs)
-- Detailed WAV functionality implementation
-- Actual prompt registration (when MCP SDK supports it)
-- Additional data processing pipelines
+| Symptom | Cause & fix |
+|---|---|
+| Error `AUTH_MISSING` | `TOORPIA_API_KEY` is not set in the MCP server config. Add it to the `env` block and restart the client. |
+| Error `AUTH_FAILED` | The API key is invalid or expired. Verify the key (no surrounding quotes/whitespace) or request a new one. |
+| Error `NETWORK_ERROR` | The server cannot reach `TOORPIA_API_URL`. Check the URL, your network/VPN, and any proxy settings. |
+| Server does not appear in the client | Run `npx -y @toorpia/mcp` once in a terminal to see startup errors. Common causes: Node < 18, `npx` not on the PATH the client uses (on macOS GUI apps, install Node via the official installer or set an absolute path to `npx`). |
+| `spawn npx ENOENT` (Windows) | Use `"command": "npx.cmd"` or an absolute path to `npx`. |
+| `add_plot` fails with a dimension-mismatch message | The new CSV has a different number of embedding dimensions than the basemap. Run `preview_csv` on both files and compare `embeddingDimensions`. |
+| `add_plot` fails with a process-method mismatch | The target map was not created from embeddings (e.g. a CSV/waveform map). Use `list_maps` and pick a map created by `create_basemap`. |
+| `create_basemap` on a large file seems stuck | Processing is synchronous and can take minutes for large datasets. The server waits up to 30 minutes. Keep the file as `.csv.gz` to shorten the upload. |
+| HTTP 415 on upload | Older API servers reject gzip-compressed uploads; the server automatically retries uncompressed. If it still fails, the file itself is not valid CSV. |
+| Tool responses look stale after an update | `npx` may cache an old version. Run `npx -y @toorpia/mcp@latest`, or clear the cache with `npm cache clean --force`. |
 
-## Developer Guide
+## Development
 
-### Adding Tools
-1. Implement in `src/tools/[category].ts`
-2. Import and register in `src/server.ts`
+```bash
+cd mcp
+npm install
+npm run build     # compile to dist/
+npm run dev       # run from TypeScript sources (tsx)
+```
 
-### Error Handling
-- Use unified `{ok, code, reason}` format
-- Call log function `logTool(name, result, duration)`
+Source layout:
 
-### Environment Variables
-- Implement feature control via environment variables
-- Add new variables to `.env.example`
+```
+src/
+├─ index.ts     # bin entry point
+├─ server.ts    # MCP server + tool definitions
+├─ api.ts       # toorPIA API client (auth, gzip upload, retries)
+├─ preview.ts   # local embedding-CSV inspection
+├─ summary.ts   # 2-D distribution summary statistics
+└─ errors.ts    # unified {ok, code, reason} error payloads
+```
+
+`testdata/embedding_sample.csv` (60 rows × 16 dims, 2 clusters) and `embedding_addplot_sample.csv` are small deterministic fixtures for manual testing.
+
+## Publishing (maintainers)
+
+The package is published as `@toorpia/mcp`. One-time setup: create the free npm organization `toorpia` (npmjs.com → Add Organization) with the publishing account as owner. Then:
+
+```bash
+cd mcp
+npm publish --access public
+```
+
+`prepublishOnly` builds `dist/` automatically; only `dist/` and `README.md` are included in the package.
