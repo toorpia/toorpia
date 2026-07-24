@@ -44,6 +44,12 @@ export TOORPIA_API_KEY='your-api-key'
 For local development and production use, install toorPIA in your Python environment:
 
 ```bash
+pip install toorpia
+```
+
+Or install the latest development version directly from GitHub:
+
+```bash
 pip install git+https://github.com/toorpia/toorpia.git
 ```
 
