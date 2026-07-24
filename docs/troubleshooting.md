@@ -49,6 +49,55 @@ This document explains potential issues that may occur when using toorPIA and th
    pip install git+https://github.com/toorpia/toorpia.git --force-reinstall
    ```
 
+### `externally-managed-environment` Error (PEP 668)
+
+**Symptoms**: `pip install toorpia` fails with:
+
+```
+error: externally-managed-environment
+
+× This environment is externally managed
+╰─> To install Python packages system-wide, try apt install
+    python3-xyz, ...
+```
+
+**Cause**: This is not a problem with the toorpia package. On Debian 12+, Ubuntu 23.04+,
+and Raspberry Pi OS (Bookworm and later), the OS-managed system Python blocks direct
+`pip` installs ([PEP 668](https://peps.python.org/pep-0668/)) to prevent conflicts with
+apt-managed packages.
+
+**Solutions**:
+
+1. **Use a virtual environment (recommended)**
+   ```bash
+   python3 -m venv ~/toorpia-venv
+   ~/toorpia-venv/bin/pip install toorpia
+
+   # Interactive use
+   source ~/toorpia-venv/bin/activate
+   python your_script.py
+
+   # Or run directly without activation (recommended for cron / systemd)
+   ~/toorpia-venv/bin/python your_script.py
+   ```
+
+   For monitoring scripts on edge devices (Raspberry Pi / RevPi etc.), reference the
+   venv's Python by absolute path in your cron job or systemd unit, e.g.
+   `ExecStart=/home/pi/toorpia-venv/bin/python /home/pi/monitor.py`.
+
+   If venv creation fails, install the venv support packages first:
+   ```bash
+   sudo apt install python3-full python3-venv
+   ```
+
+2. **User-site install (single-purpose devices)**
+   ```bash
+   pip3 install --user --break-system-packages toorpia
+   ```
+   This installs into `~/.local` without touching system directories. Avoid
+   `sudo pip3 install --break-system-packages` (system-wide override), which can
+   break OS-managed Python packages.
+
 ### Environment Variables Not Recognized
 
 **Symptoms**: API key error occurs despite setting `TOORPIA_API_KEY`
