@@ -310,6 +310,46 @@ print(f"Anomaly status: {addplot_result['abnormalityStatus']}")
 - `basemap_*()`: Returns `dict` with structured metadata (`xyData`, `mapNo`, `shareUrl`)
 - **Both approaches**: Automatically update `client.mapNo` and `client.shareUrl` attributes
 
+### Asynchronous Job Mode (`async_mode=True`)
+
+For large datasets (tens of thousands of records), engine processing can take several
+minutes, and a synchronous request may be cut off by proxy/load-balancer idle timeouts
+before the result arrives. All basemap/addplot methods (`fit_transform()`, `addplot()`,
+`basemap_csvform()`, `basemap_waveform()`, `basemap_embedding()`, `addplot_csvform()`,
+`addplot_waveform()`, `addplot_embedding()`) accept `async_mode=True`, which submits the
+request in the server's asynchronous job mode and returns a `Job` handle immediately:
+
+```python
+# Submit and wait for completion (recommended for long-running jobs)
+job = client.basemap_csvform(["large_data.csv"], async_mode=True)
+result = job.wait()                      # Polls every 5s; same return value as the sync call
+print(result['mapNo'], result['shareUrl'])
+
+# Non-blocking polling
+import time
+job = client.addplot_csvform(["new_data.csv"], async_mode=True)
+while not job.finished:
+    print(f"status: {job.status}")       # 'queued' -> 'running' -> 'done' | 'failed'
+    time.sleep(10)
+    job.refresh()
+result = job.result()                    # Same return value as the sync call
+
+# Custom polling interval / timeout (job keeps running server-side after a timeout)
+result = job.wait(poll_interval=10, timeout=1800)
+
+# Raw job status (also usable to re-fetch results later; kept for 24h after completion)
+info = client.get_job(job.job_id)        # {'jobId': ..., 'status': ..., 'result': ..., ...}
+```
+
+Notes:
+- `job.wait()` / `job.result()` return exactly what the synchronous call would have
+  returned, and update `client.mapNo` / `client.currentAddPlotNo` / `client.shareUrl`
+  the same way.
+- Results are kept for 24 hours after completion (server setting); up to 5 jobs per
+  user can be queued/running at once (submissions beyond that fail with an error).
+- On servers without async support, the request falls back to synchronous execution
+  and the same method returns the synchronous result directly.
+
 ---
 
 ## Documentation

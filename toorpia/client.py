@@ -2,7 +2,9 @@ import requests
 import json
 import os
 import base64
+import functools
 from .config import API_URL
+from .job import Job
 from .utils.authentication import get_api_key
 import numpy as np
 import hashlib
@@ -10,6 +12,7 @@ import glob
 
 # デコレータを定義
 def pre_authentication(method):
+    @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if not self.session_key:
             self.session_key = self.authenticate()
@@ -40,8 +43,69 @@ class toorPIA:
             print(f"Response content: {response.text}")
             return None
 
+    @staticmethod
+    def _async_params(async_mode):
+        """async_mode=True のとき非同期ジョブモード指定のクエリパラメータを返す"""
+        return {'async': 'true'} if async_mode else None
+
+    def _handle_job_submission(self, response, parser):
+        """?async=true 投入レスポンスを処理し、Job ハンドルを返す
+
+        認証エラー(401)・アクティブジョブ数超過(429)・アップロードサイズ超過(413/415)
+        などは投入時に同期で返るため、ここでエラー表示して None を返す。
+        非同期モード未対応の旧サーバーは ?async=true を無視して同期実行の 200 を
+        返すため、その場合は同期実行時と同じ返り値をそのまま返す。
+        """
+        if response.status_code == 202:
+            body = response.json()
+            return Job(self, body['jobId'], parser)
+        if response.status_code == 200:
+            print("Note: server does not support asynchronous job mode; the request was executed synchronously.")
+            return parser(response)
+        try:
+            error_message = response.json().get('message', 'Unknown error')
+        except:
+            error_message = f"HTTP {response.status_code}: {response.text}"
+        print(f"Job submission failed. Server responded with error: {error_message}")
+        return None
+
     @pre_authentication
-    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, identna_er_method=None, identna_knn_k=None, vector_normalization=None):
+    def get_job(self, job_id):
+        """非同期ジョブ (async_mode=True) の現在の状態を取得する
+
+        Args:
+            job_id (str): ジョブ投入時に返された jobId
+
+        Returns:
+            dict: ジョブ情報 (jobId, type, status, createdAt, startedAt, finishedAt,
+                  expiresAt。status が done のとき httpStatus と result、failed のとき
+                  httpStatus と error を含む。result / error は同期実行時のレスポンス
+                  ボディと同形)。取得に失敗した場合は None。
+                  結果は完了後24時間（サーバー設定による）保持され、期限後は404となる
+        """
+        headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+        try:
+            response = requests.get(f"{API_URL}/jobs/{job_id}", headers=headers)
+            if response.status_code == 401:
+                # 長時間ジョブのポーリング中にセッションが切れることがあるため一度だけ再認証する
+                self.session_key = self.authenticate()
+                if self.session_key:
+                    headers['session-key'] = self.session_key
+                    response = requests.get(f"{API_URL}/jobs/{job_id}", headers=headers)
+        except requests.exceptions.RequestException as e:
+            print(f"Network error while polling job {job_id}: {str(e)}")
+            return None
+        if response.status_code == 200:
+            return response.json()
+        try:
+            error_message = response.json().get('message', 'Unknown error')
+        except:
+            error_message = f"HTTP {response.status_code}"
+        print(f"Failed to get job {job_id}. Server responded with error: {error_message}")
+        return None
+
+    @pre_authentication
+    def fit_transform(self, data, label=None, tag=None, description=None, random_seed=42, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, identna_er_method=None, identna_knn_k=None, vector_normalization=None, async_mode=False):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
@@ -80,7 +144,14 @@ class toorPIA:
         if vector_normalization is not None:
             data_dict['vector_normalization'] = bool(vector_normalization)
 
-        response = requests.post(f"{API_URL}/data/fit_transform", json=data_dict, headers=headers)
+        response = requests.post(f"{API_URL}/data/fit_transform", json=data_dict, headers=headers,
+                                 params=self._async_params(async_mode))
+        if async_mode:
+            return self._handle_job_submission(response, self._handle_fit_transform_response)
+        return self._handle_fit_transform_response(response)
+
+    def _handle_fit_transform_response(self, response):
+        """fit_transform のレスポンス処理（同期・非同期ジョブ結果の共通処理）"""
         if response.status_code == 200:
             response_data = response.json()
             baseXyData = response_data['resdata']['baseXyData']
@@ -376,7 +447,7 @@ class toorPIA:
                     pass
 
     @pre_authentication
-    def addplot(self, data, *args, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, identna_er_method=None, identna_knn_k=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None):
+    def addplot(self, data, *args, weight_option_str=None, type_option_str=None, identna_resolution=None, identna_effective_radius=None, identna_er_method=None, identna_knn_k=None, detabn_max_window=None, detabn_rate_threshold=None, detabn_threshold=None, detabn_print_score=None, async_mode=False):
         headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
 
         # DataFrameの型に基づいて自動生成（パラメータが指定されていない場合）
@@ -439,27 +510,16 @@ class toorPIA:
             print("Error: Both mapNo and mapDataDir are undefined.")
             return None
 
-        response = requests.post(f"{API_URL}/data/addplot", json=data_dict, headers=headers)
-        if response.status_code == 200:
-            response_data = response.json()
-            addXyData = response_data['resdata']
-            self.currentAddPlotNo = response_data.get('addPlotNo')  # 追加プロット番号を保存
-            self.shareUrl = response_data.get('shareUrl')  # シェアURLを保存
-            
-            # 座標データをNumPy配列に変換
-            np_array = np.array(addXyData)
-            
-            # 拡張された返り値：座標データと異常度情報を含む辞書を返す
-            result = {
-                'xyData': np_array,
-                'addPlotNo': self.currentAddPlotNo,
-                'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
-                'abnormalityScore': response_data.get('abnormalityScore'),    # 異常度スコア
-                'diagnosticScore': response_data.get('diagnosticScore'),     # 複合診断スコア
-                'shareUrl': self.shareUrl
-            }
+        response = requests.post(f"{API_URL}/data/addplot", json=data_dict, headers=headers,
+                                 params=self._async_params(async_mode))
+        if async_mode:
+            return self._handle_job_submission(response, self._handle_addplot_response)
+        return self._handle_addplot_response(response)
 
-            return result
+    def _handle_addplot_response(self, response):
+        """addplot のレスポンス処理（同期・非同期ジョブ結果の共通処理）"""
+        if response.status_code == 200:
+            return self._build_addplot_result(response.json())
         elif response.status_code == 400:
             print("Error: Bad request. Both mapNo and mapData are missing.")
             return None
@@ -471,6 +531,61 @@ class toorPIA:
             print(f"Data addition failed. Server responded with error: {error_message}")
             return None
 
+    def _build_addplot_result(self, response_data):
+        """addplot系レスポンスボディから返り値の辞書を組み立て、クライアント属性を更新する"""
+        addXyData = response_data['resdata']
+        self.currentAddPlotNo = response_data.get('addPlotNo')  # 追加プロット番号を保存
+        self.shareUrl = response_data.get('shareUrl')  # シェアURLを保存
+
+        # 座標データをNumPy配列に変換
+        np_array = np.array(addXyData)
+
+        # 拡張された返り値：座標データと異常度情報を含む辞書を返す
+        return {
+            'xyData': np_array,
+            'addPlotNo': self.currentAddPlotNo,
+            'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
+            'abnormalityScore': response_data.get('abnormalityScore'),    # 異常度スコア
+            'diagnosticScore': response_data.get('diagnosticScore'),     # 複合診断スコア
+            'shareUrl': self.shareUrl
+        }
+
+    def _handle_addplot_file_response(self, response, kind):
+        """addplot_waveform / addplot_csvform / addplot_embedding のレスポンス処理
+        （同期・非同期ジョブ結果の共通処理）
+
+        Args:
+            kind (str): 'waveform', 'csvform', 'embedding' のいずれか
+        """
+        error_labels = {'waveform': 'Waveform addplot', 'csvform': 'CSV addplot', 'embedding': 'Embedding addplot'}
+        if response.status_code == 200:
+            return self._build_addplot_result(response.json())
+        elif response.status_code == 400:
+            if kind == 'waveform':
+                try:
+                    error_response = response.json()
+                    error_code = error_response.get('error', '')
+                    if error_code == 'MKFFTSEG_OPTIONS_NOT_ALLOWED':
+                        print("Error: mkfftSeg options are not allowed in addplot_waveform.")
+                        print("The system automatically uses the basemap's mkfftSeg options for data consistency.")
+                    else:
+                        print("Error: Bad request. Invalid parameters or missing map.")
+                except:
+                    print("Error: Bad request. Invalid parameters or missing map.")
+            else:
+                print("Error: Bad request. Invalid parameters or missing map.")
+            return None
+        elif response.status_code == 401:
+            print("Error: Unauthorized. Invalid session key or map number.")
+            return None
+        else:
+            try:
+                error_message = response.json().get('message', 'Unknown error')
+            except:
+                error_message = f"HTTP {response.status_code}: {response.text}"
+            print(f"{error_labels[kind]} failed. Server responded with error: {error_message}")
+            return None
+
     @pre_authentication
     def addplot_waveform(self, files, mapNo=None,
                         # identna parameters
@@ -479,8 +594,10 @@ class toorPIA:
                         # detabn parameters
                         detabn_max_window=5, detabn_rate_threshold=1.0,
                         detabn_threshold=None, detabn_print_score=True,
+                        # async job mode
+                        async_mode=False,
                         # Legacy mkfftSeg parameters (deprecated - for backward compatibility warnings)
-                        mkfftseg_di=None, mkfftseg_hp=None, mkfftseg_lp=None, 
+                        mkfftseg_di=None, mkfftseg_hp=None, mkfftseg_lp=None,
                         mkfftseg_nm=None, mkfftseg_ol=None, mkfftseg_sr=None,
                         mkfftseg_wf=None, mkfftseg_wl=None):
         """
@@ -501,6 +618,9 @@ class toorPIA:
             detabn_rate_threshold (float): Rate threshold for abnormality detection
             detabn_threshold (float, optional): Threshold for relative normal area value. When omitted (None), the server auto-derives it from detabn's coverage default (0.90)
             detabn_print_score (bool): Whether to print abnormality score
+            async_mode (bool, optional): If True, submit in the server's asynchronous job
+                mode (?async=true) and return a Job handle immediately instead of blocking.
+                Call job.wait() to get the same return value as the synchronous call. Default: False.
 
         Returns:
             dict: Dictionary containing:
@@ -513,6 +633,7 @@ class toorPIA:
                     - distance: Distance analysis (meanDistance, distanceStd, radiusOfGyration, normalizedDistance, exceedanceRatio, threshold, status)
                     - compositeStatus: Combined status ('normal', 'warning', 'danger')
                 - shareUrl: Share URL for the map with this addplot
+            When async_mode=True, a toorpia.job.Job handle is returned instead.
 
         Note:
             mkfftSeg options (filters, window settings, etc.) are automatically inherited
@@ -591,55 +712,18 @@ class toorPIA:
             
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
             response = requests.post(
-                f"{API_URL}/data/addplot_waveform", 
+                f"{API_URL}/data/addplot_waveform",
                 files=files_to_upload,
                 data=form_data,
-                headers=headers
+                headers=headers,
+                params=self._async_params(async_mode)
             )
-            
-            if response.status_code == 200:
-                response_data = response.json()
-                addXyData = response_data['resdata']
-                self.currentAddPlotNo = response_data.get('addPlotNo')  # Save addplot number
-                self.shareUrl = response_data.get('shareUrl')  # Save share URL
-                
-                # Convert coordinate data to NumPy array
-                np_array = np.array(addXyData)
-                
-                # Return extended result with coordinate data and abnormality information
-                result = {
-                    'xyData': np_array,
-                    'addPlotNo': self.currentAddPlotNo,
-                    'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
-                    'abnormalityScore': response_data.get('abnormalityScore'),    # Abnormality score
-                    'diagnosticScore': response_data.get('diagnosticScore'),     # Composite diagnostic score
-                    'shareUrl': self.shareUrl
-                }
 
-                return result
-            elif response.status_code == 400:
-                try:
-                    error_response = response.json()
-                    error_code = error_response.get('error', '')
-                    if error_code == 'MKFFTSEG_OPTIONS_NOT_ALLOWED':
-                        print("Error: mkfftSeg options are not allowed in addplot_waveform.")
-                        print("The system automatically uses the basemap's mkfftSeg options for data consistency.")
-                    else:
-                        print("Error: Bad request. Invalid parameters or missing map.")
-                except:
-                    print("Error: Bad request. Invalid parameters or missing map.")
-                return None
-            elif response.status_code == 401:
-                print("Error: Unauthorized. Invalid session key or map number.")
-                return None
-            else:
-                try:
-                    error_message = response.json().get('message', 'Unknown error')
-                except:
-                    error_message = f"HTTP {response.status_code}: {response.text}"
-                print(f"Waveform addplot failed. Server responded with error: {error_message}")
-                return None
-                
+            if async_mode:
+                return self._handle_job_submission(
+                    response, lambda r: self._handle_addplot_file_response(r, 'waveform'))
+            return self._handle_addplot_file_response(response, 'waveform')
+
         except requests.exceptions.RequestException as e:
             print(f"Network error during file upload: {str(e)}")
             return None
@@ -852,7 +936,9 @@ class toorPIA:
                        identna_er_method=None, identna_knn_k=None,
                        # detabn parameters
                        detabn_max_window=5, detabn_rate_threshold=1.0,
-                       detabn_threshold=None, detabn_print_score=True):
+                       detabn_threshold=None, detabn_print_score=True,
+                       # async job mode
+                       async_mode=False):
         """
         Process CSV files for addplot (additional plot) analysis
         Uses the same CSV processing options as the base map (stored in database)
@@ -868,6 +954,9 @@ class toorPIA:
             detabn_rate_threshold (float): Rate threshold for abnormality detection
             detabn_threshold (float, optional): Threshold for relative normal area value. When omitted (None), the server auto-derives it from detabn's coverage default (0.90)
             detabn_print_score (bool): Whether to print abnormality score
+            async_mode (bool, optional): If True, submit in the server's asynchronous job
+                mode (?async=true) and return a Job handle immediately instead of blocking.
+                Call job.wait() to get the same return value as the synchronous call. Default: False.
 
         Returns:
             dict: Dictionary containing:
@@ -880,13 +969,14 @@ class toorPIA:
                     - distance: Distance analysis (meanDistance, distanceStd, radiusOfGyration, normalizedDistance, exceedanceRatio, threshold, status)
                     - compositeStatus: Combined status ('normal', 'warning', 'danger')
                 - shareUrl: Share URL for the map with this addplot
+            When async_mode=True, a toorpia.job.Job handle is returned instead.
         """
         # Determine target map number
         target_mapNo = mapNo if mapNo is not None else self.mapNo
         if target_mapNo is None:
             print("Error: Map number is not specified. Please provide mapNo or use basemap_csvform() first.")
             return None
-        
+
         # File existence and format check (accept both string and list, same as csvform)
         if isinstance(files, str):
             files = [files]  # Convert single file to list
@@ -942,46 +1032,18 @@ class toorPIA:
             
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
             response = requests.post(
-                f"{API_URL}/data/addplot_csvform", 
+                f"{API_URL}/data/addplot_csvform",
                 files=files_to_upload,
                 data=form_data,
-                headers=headers
+                headers=headers,
+                params=self._async_params(async_mode)
             )
-            
-            if response.status_code == 200:
-                response_data = response.json()
-                addXyData = response_data['resdata']
-                self.currentAddPlotNo = response_data.get('addPlotNo')  # Save addplot number
-                self.shareUrl = response_data.get('shareUrl')  # Save share URL
-                
-                # Convert coordinate data to NumPy array
-                np_array = np.array(addXyData)
-                
-                # Return extended result with coordinate data and abnormality information
-                result = {
-                    'xyData': np_array,
-                    'addPlotNo': self.currentAddPlotNo,
-                    'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
-                    'abnormalityScore': response_data.get('abnormalityScore'),    # Abnormality score
-                    'diagnosticScore': response_data.get('diagnosticScore'),     # Composite diagnostic score
-                    'shareUrl': self.shareUrl
-                }
 
-                return result
-            elif response.status_code == 400:
-                print("Error: Bad request. Invalid parameters or missing map.")
-                return None
-            elif response.status_code == 401:
-                print("Error: Unauthorized. Invalid session key or map number.")
-                return None
-            else:
-                try:
-                    error_message = response.json().get('message', 'Unknown error')
-                except:
-                    error_message = f"HTTP {response.status_code}: {response.text}"
-                print(f"CSV addplot failed. Server responded with error: {error_message}")
-                return None
-                
+            if async_mode:
+                return self._handle_job_submission(
+                    response, lambda r: self._handle_addplot_file_response(r, 'csvform'))
+            return self._handle_addplot_file_response(response, 'csvform')
+
         except requests.exceptions.RequestException as e:
             print(f"Network error during file upload: {str(e)}")
             return None
@@ -1003,7 +1065,9 @@ class toorPIA:
                          identna_er_method=None, identna_knn_k=None,
                          # detabn parameters
                          detabn_max_window=5, detabn_rate_threshold=1.0,
-                         detabn_threshold=None, detabn_print_score=True):
+                         detabn_threshold=None, detabn_print_score=True,
+                         # async job mode
+                         async_mode=False):
         """
         Process embedding data for addplot (additional plot) analysis
 
@@ -1028,6 +1092,9 @@ class toorPIA:
             detabn_rate_threshold (float): Rate threshold for abnormality detection
             detabn_threshold (float, optional): Threshold for relative normal area value. When omitted (None), the server auto-derives it from detabn's coverage default (0.90)
             detabn_print_score (bool): Whether to print abnormality score
+            async_mode (bool, optional): If True, submit in the server's asynchronous job
+                mode (?async=true) and return a Job handle immediately instead of blocking.
+                Call job.wait() to get the same return value as the synchronous call. Default: False.
 
         Returns:
             dict: Dictionary containing:
@@ -1040,6 +1107,7 @@ class toorPIA:
                     - distance: Distance analysis (meanDistance, distanceStd, radiusOfGyration, normalizedDistance, exceedanceRatio, threshold, status)
                     - compositeStatus: Combined status ('normal', 'warning', 'danger')
                 - shareUrl: Share URL for the map with this addplot
+            When async_mode=True, a toorpia.job.Job handle is returned instead.
         """
         # Determine target map number
         target_mapNo = mapNo if mapNo is not None else self.mapNo
@@ -1108,41 +1176,13 @@ class toorPIA:
 
             # Send as multipart/form-data to the addplot_embedding endpoint
             # (falls back to uncompressed upload on servers without .csv.gz support)
-            response = self._post_embedding_files('/data/addplot_embedding', files, form_data)
+            response = self._post_embedding_files('/data/addplot_embedding', files, form_data,
+                                                  params=self._async_params(async_mode))
 
-            if response.status_code == 200:
-                response_data = response.json()
-                addXyData = response_data['resdata']
-                self.currentAddPlotNo = response_data.get('addPlotNo')  # Save addplot number
-                self.shareUrl = response_data.get('shareUrl')  # Save share URL
-
-                # Convert coordinate data to NumPy array
-                np_array = np.array(addXyData)
-
-                # Return extended result with coordinate data and abnormality information
-                result = {
-                    'xyData': np_array,
-                    'addPlotNo': self.currentAddPlotNo,
-                    'abnormalityStatus': response_data.get('abnormalityStatus'),  # 'normal', 'abnormal', 'unknown'
-                    'abnormalityScore': response_data.get('abnormalityScore'),    # Abnormality score
-                    'diagnosticScore': response_data.get('diagnosticScore'),     # Composite diagnostic score
-                    'shareUrl': self.shareUrl
-                }
-
-                return result
-            elif response.status_code == 400:
-                print("Error: Bad request. Invalid parameters or missing map.")
-                return None
-            elif response.status_code == 401:
-                print("Error: Unauthorized. Invalid session key or map number.")
-                return None
-            else:
-                try:
-                    error_message = response.json().get('message', 'Unknown error')
-                except:
-                    error_message = f"HTTP {response.status_code}: {response.text}"
-                print(f"Embedding addplot failed. Server responded with error: {error_message}")
-                return None
+            if async_mode:
+                return self._handle_job_submission(
+                    response, lambda r: self._handle_addplot_file_response(r, 'embedding'))
+            return self._handle_addplot_file_response(response, 'embedding')
 
         except requests.exceptions.RequestException as e:
             print(f"Network error during file upload: {str(e)}")
@@ -1158,12 +1198,41 @@ class toorPIA:
                 except:
                     pass
 
+    def _handle_basemap_response(self, response, error_prefix):
+        """basemap_csvform / basemap_waveform / basemap_embedding のレスポンス処理
+        （同期・非同期ジョブ結果の共通処理）
+
+        Args:
+            error_prefix (str): エラーメッセージの先頭に付ける処理名
+        """
+        if response.status_code == 200:
+            response_data = response.json()
+            baseXyData = response_data['resdata']['baseXyData']
+            self.mapNo = response_data['resdata']['mapNo']
+            self.shareUrl = response_data.get('shareUrl')  # Save share URL
+
+            np_array = np.array(baseXyData)  # Convert baseXyData to NumPy array
+
+            # Return unified structure similar to addplot methods
+            return {
+                'xyData': np_array,
+                'mapNo': self.mapNo,
+                'shareUrl': self.shareUrl
+            }
+        else:
+            try:
+                error_message = response.json().get('message', 'Unknown error')
+            except:
+                error_message = f"HTTP {response.status_code}: {response.text}"
+            print(f"{error_prefix}. Server responded with error: {error_message}")
+            return None
+
     @pre_authentication
     def basemap_csvform(self, files, weight_option_str=None, type_option_str=None,
                     drop_columns=None, label=None, tag=None, description=None,
                     random_seed=42, identna_resolution=None, identna_effective_radius=None,
                     identna_er_method=None, identna_knn_k=None,
-                    vector_normalization=None):
+                    vector_normalization=None, async_mode=False):
         """
         Create base map from CSV files directly with unified return structure
         
@@ -1181,37 +1250,41 @@ class toorPIA:
             identna_er_method (str, optional): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
             identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
             vector_normalization (bool, optional): Enable/disable L2 vector normalization in the toorpia binary. Default server-side is True. Pass False to disable (adds the `-u` flag). The chosen value is persisted on the basemap and inherited by subsequent addplot calls.
+            async_mode (bool, optional): If True, submit in the server's asynchronous job
+                mode (?async=true) and return a Job handle immediately instead of blocking.
+                Call job.wait() to get the same return value as the synchronous call. Default: False.
 
         Returns:
             dict: Dictionary containing:
                 - xyData: Coordinate data as NumPy array (each row is [x, y])
                 - mapNo: Map number
                 - shareUrl: Share URL for the map
+            When async_mode=True, a toorpia.job.Job handle is returned instead.
         """
         # File existence and format check (accept both string and list)
         if isinstance(files, str):
             files = [files]  # Convert single file to list
-        
+
         if not files or not isinstance(files, list):
             print("Error: files must be a file path (string) or list of file paths")
             return None
-        
+
         files_to_upload = []
         for file_path in files:
             if not os.path.exists(file_path):
                 print(f"Error: File not found: {file_path}")
                 return None
-            
+
             # File format check (.csv only)
             ext = os.path.splitext(file_path)[1].lower()
             if ext != '.csv':
                 print(f"Error: Unsupported file format: {ext}. Only .csv files are supported.")
                 return None
-            
+
             files_to_upload.append(('files', open(file_path, 'rb')))
-        
+
         try:
-            # Prepare form data 
+            # Prepare form data
             form_data = {
                 'label': label or '',
                 'tag': tag or '',
@@ -1254,31 +1327,15 @@ class toorPIA:
                 f"{API_URL}/data/basemap_csvform",
                 files=files_to_upload,
                 data=form_data,
-                headers=headers
+                headers=headers,
+                params=self._async_params(async_mode)
             )
-            
-            if response.status_code == 200:
-                response_data = response.json()
-                baseXyData = response_data['resdata']['baseXyData']
-                self.mapNo = response_data['resdata']['mapNo']
-                self.shareUrl = response_data.get('shareUrl')  # Save share URL
-                
-                np_array = np.array(baseXyData)  # Convert baseXyData to NumPy array
-                
-                # Return unified structure similar to addplot methods
-                return {
-                    'xyData': np_array,
-                    'mapNo': self.mapNo,
-                    'shareUrl': self.shareUrl
-                }
-            else:
-                try:
-                    error_message = response.json().get('message', 'Unknown error')
-                except:
-                    error_message = f"HTTP {response.status_code}: {response.text}"
-                print(f"CSV basemap creation failed. Server responded with error: {error_message}")
-                return None
-                
+
+            if async_mode:
+                return self._handle_job_submission(
+                    response, lambda r: self._handle_basemap_response(r, 'CSV basemap creation failed'))
+            return self._handle_basemap_response(response, 'CSV basemap creation failed')
+
         except requests.exceptions.RequestException as e:
             print(f"Network error during CSV file upload: {str(e)}")
             return None
@@ -1297,7 +1354,7 @@ class toorPIA:
     def basemap_embedding(self, files, l2_normalization=None, id_columns=None,
                     label=None, tag=None, description=None,
                     identna_resolution=None, identna_effective_radius=None,
-                    identna_er_method=None, identna_knn_k=None):
+                    identna_er_method=None, identna_knn_k=None, async_mode=False):
         """
         Create base map from embedding vectors with unified return structure
 
@@ -1328,12 +1385,16 @@ class toorPIA:
             identna_effective_radius (float or "auto", optional): Effective radius. "auto" for automatic determination (default: 0.1)
             identna_er_method (str, optional): Bandwidth method when effective_radius="auto": "silverman" (default) or "knn"
             identna_knn_k (int, optional): k for knn method (0 = auto ceil(sqrt(n)))
+            async_mode (bool, optional): If True, submit in the server's asynchronous job
+                mode (?async=true) and return a Job handle immediately instead of blocking.
+                Call job.wait() to get the same return value as the synchronous call. Default: False.
 
         Returns:
             dict: Dictionary containing:
                 - xyData: Coordinate data as NumPy array (each row is [x, y])
                 - mapNo: Map number
                 - shareUrl: Share URL for the map
+            When async_mode=True, a toorpia.job.Job handle is returned instead.
         """
         # ndarray/DataFrame direct input: convert to a temporary CSV file
         temp_csv_path = None
@@ -1392,29 +1453,13 @@ class toorPIA:
 
             # Send as multipart/form-data to the basemap_embedding endpoint
             # (falls back to uncompressed upload on servers without .csv.gz support)
-            response = self._post_embedding_files('/data/basemap_embedding', files, form_data)
+            response = self._post_embedding_files('/data/basemap_embedding', files, form_data,
+                                                  params=self._async_params(async_mode))
 
-            if response.status_code == 200:
-                response_data = response.json()
-                baseXyData = response_data['resdata']['baseXyData']
-                self.mapNo = response_data['resdata']['mapNo']
-                self.shareUrl = response_data.get('shareUrl')  # Save share URL
-
-                np_array = np.array(baseXyData)  # Convert baseXyData to NumPy array
-
-                # Return unified structure similar to addplot methods
-                return {
-                    'xyData': np_array,
-                    'mapNo': self.mapNo,
-                    'shareUrl': self.shareUrl
-                }
-            else:
-                try:
-                    error_message = response.json().get('message', 'Unknown error')
-                except:
-                    error_message = f"HTTP {response.status_code}: {response.text}"
-                print(f"Embedding basemap creation failed. Server responded with error: {error_message}")
-                return None
+            if async_mode:
+                return self._handle_job_submission(
+                    response, lambda r: self._handle_basemap_response(r, 'Embedding basemap creation failed'))
+            return self._handle_basemap_response(response, 'Embedding basemap creation failed')
 
         except requests.exceptions.RequestException as e:
             print(f"Network error during embedding CSV upload: {str(e)}")
@@ -1442,7 +1487,9 @@ class toorPIA:
                         # toorpia binary option
                         vector_normalization=None,
                         # metadata
-                        label=None, tag=None, description=None):
+                        label=None, tag=None, description=None,
+                        # async job mode
+                        async_mode=False):
         """
         Create base map from WAV or CSV files directly with unified return structure
         
@@ -1464,12 +1511,16 @@ class toorPIA:
             label (str): Map label
             tag (str): Map tag
             description (str): Map description
+            async_mode (bool, optional): If True, submit in the server's asynchronous job
+                mode (?async=true) and return a Job handle immediately instead of blocking.
+                Call job.wait() to get the same return value as the synchronous call. Default: False.
 
         Returns:
             dict: Dictionary containing:
                 - xyData: Coordinate data as NumPy array (each row is [x, y])
                 - mapNo: Map number
                 - shareUrl: Share URL for the map
+            When async_mode=True, a toorpia.job.Job handle is returned instead.
         """
         # File existence and format check
         if not files or not isinstance(files, list):
@@ -1532,31 +1583,15 @@ class toorPIA:
                 f"{API_URL}/data/basemap_waveform",
                 files=files_to_upload,
                 data=form_data,
-                headers=headers
+                headers=headers,
+                params=self._async_params(async_mode)
             )
-            
-            if response.status_code == 200:
-                response_data = response.json()
-                baseXyData = response_data['resdata']['baseXyData']
-                self.mapNo = response_data['resdata']['mapNo']
-                self.shareUrl = response_data.get('shareUrl')  # Save share URL
-                
-                np_array = np.array(baseXyData)  # Convert baseXyData to NumPy array
-                
-                # Return unified structure similar to addplot methods
-                return {
-                    'xyData': np_array,
-                    'mapNo': self.mapNo,
-                    'shareUrl': self.shareUrl
-                }
-            else:
-                try:
-                    error_message = response.json().get('message', 'Unknown error')
-                except:
-                    error_message = f"HTTP {response.status_code}: {response.text}"
-                print(f"Waveform basemap creation failed. Server responded with error: {error_message}")
-                return None
-                
+
+            if async_mode:
+                return self._handle_job_submission(
+                    response, lambda r: self._handle_basemap_response(r, 'Waveform basemap creation failed'))
+            return self._handle_basemap_response(response, 'Waveform basemap creation failed')
+
         except requests.exceptions.RequestException as e:
             print(f"Network error during file upload: {str(e)}")
             return None
@@ -1910,7 +1945,7 @@ class toorPIA:
                     pass
             return None
 
-    def _post_embedding_files(self, endpoint, file_paths, form_data):
+    def _post_embedding_files(self, endpoint, file_paths, form_data, params=None):
         """
         POST embedding CSV files (.csv / .csv.gz) to an embedding endpoint as
         multipart/form-data.
@@ -1924,6 +1959,7 @@ class toorPIA:
             endpoint (str): Endpoint path (e.g. "/data/basemap_embedding")
             file_paths (list): Paths of the CSV files to upload
             form_data (dict): Additional form fields
+            params (dict, optional): Query parameters (e.g. {'async': 'true'})
 
         Returns:
             requests.Response: The server response (of the retry, if one occurred)
@@ -1934,7 +1970,7 @@ class toorPIA:
             handles = [('files', open(p, 'rb')) for p in paths]
             try:
                 return requests.post(f"{API_URL}{endpoint}", files=handles,
-                                     data=form_data, headers=headers)
+                                     data=form_data, headers=headers, params=params)
             finally:
                 for _, handle in handles:
                     try:

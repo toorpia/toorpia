@@ -15,6 +15,7 @@ This document provides detailed specifications for all methods and parameters of
 - [Alternative Methods](#alternative-methods)
   - [fit_transform()](#fit_transform) - DataFrame-based processing
   - [addplot()](#addplot) - DataFrame-based anomaly detection
+- [Asynchronous Job Mode](#asynchronous-job-mode) - `async_mode=True` for long-running jobs
 - [Map Management](#map-management)
 - [Parameter Details](#parameter-details)
 - [Return Values](#return-values)
@@ -720,6 +721,61 @@ print(f"Share URL: {result['shareUrl']}")
 - **No Column Specification Needed**: Unlike general addplot methods, you don't need to specify weight or type options—they're automatically retrieved from the database
 - **Dimension Validation**: The system automatically validates that the uploaded CSV has the same effective number of columns as the base map
 - **Process Method Compatibility**: Only works with maps created using `fit_transform_csvform` (CSV-based maps)
+
+---
+
+## Asynchronous Job Mode
+
+All basemap/addplot methods (`basemap_csvform()`, `basemap_waveform()`, `basemap_embedding()`,
+`addplot_csvform()`, `addplot_waveform()`, `addplot_embedding()`, `fit_transform()`, `addplot()`)
+accept an `async_mode` keyword argument. With `async_mode=True`, the request is submitted in the
+server's asynchronous job mode (`?async=true`): the server responds immediately with a job ID and
+the method returns a `toorpia.job.Job` handle instead of blocking until the engine finishes.
+
+This is recommended for large datasets where engine processing takes several minutes, because a
+long-running synchronous request can be cut off by proxy/load-balancer idle timeouts before the
+result (mapNo, addPlotNo, anomaly status) reaches the client.
+
+```python
+job = client.basemap_csvform(["large_data.csv"], async_mode=True)
+
+job.job_id     # e.g. "job_0123456789abcdef..."
+job.status     # 'queued' -> 'running' -> 'done' | 'failed'
+job.finished   # True when status is 'done' or 'failed'
+
+result = job.wait()   # Poll until completion; returns the same value as the synchronous call
+```
+
+### Job Methods
+
+| Method | Description |
+|--------|-------------|
+| `job.wait(poll_interval=5, timeout=None)` | Poll until completion and return the same value as the synchronous call. Returns `None` on timeout or job failure (the job keeps running server-side after a client timeout). |
+| `job.refresh()` | Poll once and update `job.status` / `job.raw`. Returns the current status string, or `None` if the poll failed. |
+| `job.result()` | Return the parsed result of a finished job (same value as the synchronous call). Client attributes (`mapNo`, `currentAddPlotNo`, `shareUrl`) are updated at this point, exactly as in synchronous execution. |
+
+### get_job()
+
+Fetches the raw job status from the server. Useful to re-fetch a result later (results are kept
+for 24 hours after completion, server-configurable) or to inspect timing metadata.
+
+```python
+info = client.get_job("job_0123456789abcdef...")
+# {'jobId': ..., 'type': 'basemap_csvform', 'status': 'done', 'httpStatus': 200,
+#  'result': {...},  # same shape as the synchronous response body
+#  'createdAt': ..., 'startedAt': ..., 'finishedAt': ..., 'expiresAt': ...}
+```
+
+### Behavior Notes
+
+- Authentication errors (401), rate limits (429, including the per-user active job limit of 5),
+  and upload size errors (413/415) are still returned synchronously at submission time; in those
+  cases the method prints the error and returns `None`.
+- Business validation errors (e.g. invalid mapNo) are detected during job execution and surface
+  as a `failed` job; `job.wait()` prints the same error message as the synchronous call and
+  returns `None`.
+- On servers without async support, `?async=true` is ignored and the request runs synchronously;
+  the method then returns the synchronous result directly (with a note printed).
 
 ---
 
