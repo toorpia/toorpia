@@ -6,6 +6,7 @@ import subprocess
 import random
 import string
 from toorpia.client import toorPIA
+from toorpia.job import Job
 
 def test_fit_transform():
     # APIキーを環境変数から取得するか、ダミーの値を使用
@@ -39,6 +40,50 @@ def test_addplot():
 
     # 結果の検証
     assert add_result is not None
+
+def test_fit_transform_async():
+    api_key = os.environ.get("TOORPIA_API_KEY", "dummy_api_key")
+    toorpia_client = toorPIA(api_key=api_key)
+
+    # テストデータを読み込む
+    df = pd.read_csv("./test/rawdata/biopsy.csv")
+    df = df.drop(columns=["No", "ID", "Diagnosis"])
+
+    # async_mode=True で投入すると Job ハンドルが即座に返る
+    job = toorpia_client.fit_transform(df, async_mode=True)
+    assert isinstance(job, Job)
+    assert job.job_id is not None
+
+    # get_jobで生のジョブ情報を取得できる
+    info = toorpia_client.get_job(job.job_id)
+    assert info is not None
+    assert info["status"] in ("queued", "running", "done", "failed")
+
+    # 完了までポーリングすると同期実行時と同じ返り値が得られる
+    result = job.wait(poll_interval=2, timeout=600)
+    assert result is not None
+    assert job.status == "done"
+    assert toorpia_client.mapNo is not None
+
+def test_addplot_async():
+    api_key = os.environ.get("TOORPIA_API_KEY", "dummy_api_key")
+    toorpia_client = toorPIA(api_key=api_key)
+
+    # テストデータを読み込む
+    df = pd.read_csv("./test/rawdata/biopsy.csv")
+    df = df.drop(columns=["No", "ID", "Diagnosis"])
+
+    # まずfit_transformを呼び出してマップを作成
+    toorpia_client.fit_transform(df)
+
+    # addplotを非同期モードで実行する
+    job = toorpia_client.addplot(df, async_mode=True)
+    assert isinstance(job, Job)
+
+    add_result = job.wait(poll_interval=2, timeout=600)
+    assert add_result is not None
+    assert add_result["xyData"] is not None
+    assert toorpia_client.currentAddPlotNo is not None
 
 def test_list_map():
     api_key = os.environ.get("TOORPIA_API_KEY", "dummy_api_key")
