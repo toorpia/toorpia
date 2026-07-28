@@ -53,6 +53,17 @@ Or install the latest development version directly from GitHub:
 pip install git+https://github.com/toorpia/toorpia.git
 ```
 
+> **Note (Debian 12+ / Ubuntu 23.04+ / Raspberry Pi OS):** If `pip install` fails with
+> an `externally-managed-environment` error (PEP 668), install into a virtual
+> environment instead:
+>
+> ```bash
+> python3 -m venv ~/toorpia-venv
+> ~/toorpia-venv/bin/pip install toorpia
+> ```
+>
+> See [Troubleshooting](docs/troubleshooting.md#externally-managed-environment-error-pep-668) for details.
+
 ### Core Workflow: Basemap → Addplot Analysis
 
 toorPIA follows a simple two-step workflow for data analysis and anomaly detection:
