@@ -6,7 +6,7 @@ import { previewEmbeddingCsv } from "./preview.js";
 import { summarizeXy } from "./summary.js";
 import { ToolError, toErrorPayload } from "./errors.js";
 
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.2.0";
 
 const INSTRUCTIONS = `toorPIA is a dimensionality-reduction and anomaly-detection service built on an O(n) Laplacian-eigenmaps implementation. Unlike t-SNE/UMAP, results are deterministic and stable across runs, and new data points can be added to an existing map without recomputation, preserving coordinate consistency. This server is specialized for EMBEDDING vectors — LLM sentence/document embeddings, image features, audio embeddings, or any fixed-dimensional numeric vectors — stored as CSV files (rows = samples, columns = dimensions; .csv or .csv.gz).
 
@@ -17,6 +17,7 @@ Typical workflow:
 2. create_basemap — upload baseline embeddings and build the reference map
 3. add_plot — project new embeddings onto an existing map and get an anomaly verdict
 4. list_maps — find previously created maps to reuse
+5. describe_map — statistical summary of a saved map's 2-D distribution (e.g. before reusing it with add_plot)
 
 Raw 2-D coordinates are summarized, never returned in full; direct the user to the returned shareUrl to explore the map interactively in a browser.`;
 
@@ -250,6 +251,40 @@ export async function startServer(): Promise<void> {
           totalMaps: maps.length,
           shown: shown.length,
           maps: shown,
+        };
+      }),
+  );
+
+  server.registerTool(
+    "describe_map",
+    {
+      title: "Describe a saved map",
+      description:
+        "Fetch the stored 2-D coordinates of an existing basemap and return a statistical summary of its distribution (point count, coordinate ranges, centroid, radius of gyration, outlier/cluster estimates) together with the map's metadata and shareUrl — without re-uploading or re-processing anything. Use this to inspect a map created in an earlier session before deciding to add_plot onto it, or to compare the distributions of existing maps. Works for any map regardless of how it was created; check the returned processMethod — add_plot from this server only works on embedding maps. Read-only and does not consume the hourly analysis quota.",
+      inputSchema: {
+        mapNo: z.number().int().optional()
+          .describe("Map number to describe. Defaults to the map most recently created by create_basemap in this session. When unsure, call list_maps first."),
+      },
+    },
+    async ({ mapNo: mapNoArg }) =>
+      runTool("describe_map", async () => {
+        const mapNo = mapNoArg ?? api.lastMapNo;
+        if (mapNo == null) {
+          throw new ToolError(
+            "MAP_NO_REQUIRED",
+            "No target map: mapNo was not given and no basemap has been created in this server session. Call list_maps, pick a map, and pass its mapNo explicitly.",
+          );
+        }
+        const result = await api.getMapXy(mapNo);
+        return {
+          ok: true,
+          mapNo: result.mapNo,
+          nRecord: result.nRecord,
+          nDimension: result.nDimension,
+          processMethod: result.processMethod,
+          xySummary: summarizeXy(result.xyData),
+          shareUrl: result.shareUrl,
+          hint: "Share the shareUrl with the user for interactive exploration (full coordinates are never returned to the model). If processMethod is \"embedding\", new embedding batches can be tested against this map with add_plot.",
         };
       }),
   );
