@@ -766,6 +766,62 @@ class toorPIA:
             return None
 
     @pre_authentication
+    def get_map_xy(self, map_no=None):
+        """
+        保存済みベースマップのXY座標データを取得する
+
+        マップ生成時（basemap_*系/fit_transform系）のレスポンスに含まれる座標データと
+        同じものを、生成後いつでも再取得できます。
+
+        Note: バックエンドのエンドポイント GET /maps/{mapNo}/xy を使用します。
+        この機能に対応していない旧バージョンのバックエンドではエラーになります。
+
+        Args:
+            map_no (int, optional): マップ番号。指定がない場合は現在のマップ番号を使用
+
+        Returns:
+            dict: ベースマップのXY座標情報を含む辞書。以下のキーを含みます：
+                - mapNo: マップ番号
+                - nRecord: レコード数
+                - nDimension: 次元数
+                - processMethod: マップの作成方式
+                      "dataframe" | "csvform" | "waveform" | "embedding"
+                      （旧バージョンで作成されたマップではNone）
+                - xyData: 座標データのNumPy配列（各行は[x, y]座標）
+                - shareUrl: マップの共有URL
+
+            取得に失敗した場合はNoneを返す
+        """
+        if map_no is None:
+            if self.mapNo is None:
+                print("Error: Map number is not specified. Please provide a map_no or use fit_transform() first.")
+                return None
+            map_no = self.mapNo
+
+        headers = {'Content-Type': 'application/json', 'session-key': self.session_key}
+        response = requests.get(f"{API_URL}/maps/{map_no}/xy", headers=headers)
+        if response.status_code == 200:
+            result = response.json()
+            self.shareUrl = result.get('shareUrl')
+            # NumPy配列に変換して返す
+            np_array = np.array(result.get('xyData', []))
+            return {
+                'mapNo': result.get('mapNo'),
+                'nRecord': result.get('nRecord'),
+                'nDimension': result.get('nDimension'),
+                'processMethod': result.get('processMethod'),
+                'xyData': np_array,
+                'shareUrl': self.shareUrl
+            }
+        else:
+            try:
+                error_message = response.json().get('message', 'Unknown error')
+            except Exception:
+                error_message = f"HTTP {response.status_code}"
+            print(f"Failed to get map XY data. Server responded with error: {error_message}")
+            return None
+
+    @pre_authentication
     def export_map(self, map_no, export_dir):
         """
         指定されたマップをエクスポート（ダウンロード）し、指定されたディレクトリに保存する

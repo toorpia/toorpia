@@ -801,6 +801,36 @@ The returned map data includes the following metadata in addition to the basic i
 - `tag`: Classification tag for the map
 - `description`: Detailed description of the map
 
+### get_map_xy()
+
+Retrieves the XY coordinate data of a saved basemap. This returns the same coordinates that were included in the map-creation response (`basemap_*` / `fit_transform` methods), so you can re-fetch them at any time without re-running the analysis.
+
+```python
+# Get XY coordinates of the current map
+xy_info = client.get_map_xy()
+
+# Or specify a map number explicitly
+xy_info = client.get_map_xy(map_no=123)
+
+# Access the coordinate data
+xy_data = xy_info['xyData']          # NumPy array of [x, y] coordinates
+share_url = xy_info['shareUrl']      # Share URL for this map
+print(f"Map #{xy_info['mapNo']}: {xy_info['nRecord']} records")
+```
+
+**Returns** a dictionary with the following keys (or `None` on failure):
+- `mapNo`: Map number
+- `nRecord`: Number of records
+- `nDimension`: Number of dimensions of the original data
+- `processMethod`: How the map was created (`"dataframe"` | `"csvform"` | `"waveform"` | `"embedding"`; `None` for maps created with older versions)
+- `xyData`: NumPy array of coordinates (each row is an `[x, y]` pair)
+- `shareUrl`: Share URL for the map
+
+**Notes**:
+- Retrieving XY data does not consume the hourly analysis task quota (rate limit) — it is a read-only endpoint.
+- The XY coordinates of a saved add plot can be retrieved with [get_addplot()](#get_addplot).
+- Requires a backend version that supports the `GET /maps/{mapNo}/xy` endpoint.
+
 ### export_map()
 
 Exports a map to a specified directory, including all base map files and the `input/` subdirectory if present.
