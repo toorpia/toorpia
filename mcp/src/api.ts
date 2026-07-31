@@ -44,6 +44,15 @@ export interface MapInfo {
   shareUrl?: string | null;
 }
 
+export interface MapXyResult {
+  mapNo: number;
+  nRecord: number | null;
+  nDimension: number | null;
+  processMethod: string | null;
+  xyData: number[][];
+  shareUrl: string | null;
+}
+
 // Basemap creation on large embedding sets can take minutes; disable the
 // default 5-minute undici header timeout and rely on a generous cap instead.
 const LONG_REQUEST_AGENT = new Agent({
@@ -331,5 +340,39 @@ export class ToorpiaApi {
       );
     }
     return js as MapInfo[];
+  }
+
+  /** Fetch the stored 2-D coordinates of a saved basemap (GET /maps/{mapNo}/xy). */
+  async getMapXy(mapNo: number): Promise<MapXyResult> {
+    const res = await this.request(`/maps/${mapNo}/xy`, () => ({ method: "GET" }));
+    if (res.status === 404) {
+      throw await this.apiError(
+        res,
+        `Fetching XY data for map ${mapNo}`,
+        `Either map ${mapNo} does not exist under this API key (call list_maps to see the available maps), or the toorPIA API server predates the GET /maps/{mapNo}/xy endpoint — on such servers this call fails for every map.`,
+      );
+    }
+    if (!res.ok) {
+      throw await this.apiError(
+        res,
+        `Fetching XY data for map ${mapNo}`,
+        "Retry once; if it keeps failing, the toorPIA API server may be unavailable.",
+      );
+    }
+    const js: any = await res.json().catch(() => ({}));
+    if (!Array.isArray(js?.xyData)) {
+      throw new ToolError(
+        "INVALID_RESPONSE",
+        `The toorPIA API returned an unexpected response for GET /maps/${mapNo}/xy. Verify that TOORPIA_API_URL (${this.apiUrl}) points to a toorPIA API server that supports this endpoint.`,
+      );
+    }
+    return {
+      mapNo: typeof js.mapNo === "number" ? js.mapNo : mapNo,
+      nRecord: js?.nRecord ?? null,
+      nDimension: js?.nDimension ?? null,
+      processMethod: js?.processMethod ?? null,
+      xyData: js.xyData as number[][],
+      shareUrl: js?.shareUrl ?? null,
+    };
   }
 }

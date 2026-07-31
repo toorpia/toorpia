@@ -14,6 +14,7 @@ The server runs locally on your machine (stdio transport), reads embedding CSV f
 | `create_basemap` | Upload baseline embeddings and build the 2-D reference map. Returns `mapNo`, `shareUrl`, and a distribution summary. |
 | `add_plot` | Project new embeddings onto an existing map and run anomaly detection. Returns abnormality status/score, a composite diagnostic (normal / warning / danger), and `shareUrl`. |
 | `list_maps` | List the maps that belong to your API key (newest first). |
+| `describe_map` | Statistical summary of a saved map's 2-D distribution (point count, ranges, centroid, radius of gyration, outlier/cluster estimates) plus metadata and `shareUrl` — without re-processing anything. |
 
 ### Input data format
 
@@ -123,7 +124,7 @@ npx @modelcontextprotocol/inspector \
 Then in the Inspector UI that opens in your browser:
 
 1. Press **Connect** — the server banner should appear in the console (`[toorpia-mcp] server started`)
-2. Open **Tools → List Tools** — the four tools should be listed
+2. Open **Tools → List Tools** — the five tools should be listed
 3. Call `preview_csv` with `{"path": "<absolute path>/testdata/embedding_sample.csv"}` — returns row/dimension statistics without touching the API
 4. Call `list_maps` with `{}` — verifies authentication against the API (`AUTH_FAILED` here means the API key is wrong)
 
