@@ -3,6 +3,7 @@ import json
 import os
 import base64
 import functools
+import time
 from .config import API_URL
 from .job import Job
 from .utils.authentication import get_api_key
@@ -29,9 +30,18 @@ class toorPIA:
     currentAddPlotNo = None  # 追加：現在の追加プロット番号
     addPlots = None  # 追加：マップに関連する追加プロットのリスト
 
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, max_busy_wait_min=None):
         self.api_key = api_key if api_key else get_api_key()
-        self.session_key = None 
+        self.session_key = None
+        # サーバー混雑 (503 SERVER_BUSY) 再試行の総待ち時間上限（分）。
+        # 引数 > 環境変数 TOORPIA_MAX_BUSY_WAIT_MIN > 既定30 の順で決まる。
+        # 0 以下を指定すると再試行せず従来どおり即エラーになる
+        if max_busy_wait_min is None:
+            max_busy_wait_min = os.environ.get('TOORPIA_MAX_BUSY_WAIT_MIN')
+        try:
+            self.max_busy_wait_min = float(max_busy_wait_min)
+        except (TypeError, ValueError):
+            self.max_busy_wait_min = 30.0
 
     def authenticate(self):
         """バックエンドにAPIキーを送信して検証させ、セッションキーを取得する"""
@@ -47,6 +57,42 @@ class toorPIA:
     def _async_params(async_mode):
         """async_mode=True のとき非同期ジョブモード指定のクエリパラメータを返す"""
         return {'async': 'true'} if async_mode else None
+
+    def _post_with_busy_retry(self, do_request, reset=None):
+        """データ処理リクエストを送信し、503 (SERVER_BUSY) の間は再試行する
+
+        backend はサーバー全体の同時実行スロットが埋まっている間、同期リクエストと
+        待ち行列満杯時の非同期投入を Retry-After ヘッダ付きの 503 で即時拒否する。
+        ここでは Retry-After 秒（無ければ60秒）待って同じリクエストを再送し、
+        総待ち時間が max_busy_wait_min 分を超える場合はあきらめて最後のレスポンスを
+        返す（呼び出し元は従来どおりのエラー処理を行う）。503 を返さない旧バージョンの
+        サーバーでは一切再試行が起きないため、挙動は完全に従来どおり。
+
+        Args:
+            do_request (callable): リクエストを1回実行して requests.Response を返す関数
+            reset (callable, optional): 再送の直前に呼ばれる巻き戻し処理
+                （multipart のファイルハンドルを seek(0) で先頭に戻す等）
+
+        Returns:
+            requests.Response: 503 以外の最初のレスポンス、または待ち時間上限に
+            達した時点の最後の 503 レスポンス
+        """
+        deadline = time.monotonic() + self.max_busy_wait_min * 60
+        while True:
+            response = do_request()
+            if response.status_code != 503 or self.max_busy_wait_min <= 0:
+                return response
+            try:
+                retry_after = max(1, min(int(float(response.headers.get('Retry-After'))), 600))
+            except (TypeError, ValueError):
+                retry_after = 60
+            if time.monotonic() + retry_after > deadline:
+                print(f"Server busy (503): maximum wait time ({self.max_busy_wait_min:g} min) exceeded; giving up.")
+                return response
+            print(f"Server busy (503). Retrying in {retry_after}s (waiting up to {self.max_busy_wait_min:g} min in total)...")
+            time.sleep(retry_after)
+            if reset is not None:
+                reset()
 
     def _handle_job_submission(self, response, parser):
         """?async=true 投入レスポンスを処理し、Job ハンドルを返す
@@ -144,8 +190,9 @@ class toorPIA:
         if vector_normalization is not None:
             data_dict['vector_normalization'] = bool(vector_normalization)
 
-        response = requests.post(f"{API_URL}/data/fit_transform", json=data_dict, headers=headers,
-                                 params=self._async_params(async_mode))
+        response = self._post_with_busy_retry(lambda: requests.post(
+            f"{API_URL}/data/fit_transform", json=data_dict, headers=headers,
+            params=self._async_params(async_mode)))
         if async_mode:
             return self._handle_job_submission(response, self._handle_fit_transform_response)
         return self._handle_fit_transform_response(response)
@@ -273,11 +320,14 @@ class toorPIA:
                 form_data['vector_normalization'] = 'true' if bool(vector_normalization) else 'false'
 
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
-            response = requests.post(
-                f"{API_URL}/data/fit_transform_waveform",
-                files=files_to_upload,
-                data=form_data,
-                headers=headers
+            response = self._post_with_busy_retry(
+                lambda: requests.post(
+                    f"{API_URL}/data/fit_transform_waveform",
+                    files=files_to_upload,
+                    data=form_data,
+                    headers=headers
+                ),
+                reset=lambda: [handle.seek(0) for _, handle in files_to_upload]
             )
             
             if response.status_code == 200:
@@ -409,11 +459,14 @@ class toorPIA:
 
             # Send as multipart/form-data (same pattern as fit_transform_waveform)
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
-            response = requests.post(
-                f"{API_URL}/data/fit_transform_csvform",
-                files=files_to_upload,
-                data=form_data,
-                headers=headers
+            response = self._post_with_busy_retry(
+                lambda: requests.post(
+                    f"{API_URL}/data/fit_transform_csvform",
+                    files=files_to_upload,
+                    data=form_data,
+                    headers=headers
+                ),
+                reset=lambda: [handle.seek(0) for _, handle in files_to_upload]
             )
             
             if response.status_code == 200:
@@ -510,8 +563,9 @@ class toorPIA:
             print("Error: Both mapNo and mapDataDir are undefined.")
             return None
 
-        response = requests.post(f"{API_URL}/data/addplot", json=data_dict, headers=headers,
-                                 params=self._async_params(async_mode))
+        response = self._post_with_busy_retry(lambda: requests.post(
+            f"{API_URL}/data/addplot", json=data_dict, headers=headers,
+            params=self._async_params(async_mode)))
         if async_mode:
             return self._handle_job_submission(response, self._handle_addplot_response)
         return self._handle_addplot_response(response)
@@ -711,12 +765,15 @@ class toorPIA:
                 form_data['identna_options'] = json.dumps(identna_params)
             
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
-            response = requests.post(
-                f"{API_URL}/data/addplot_waveform",
-                files=files_to_upload,
-                data=form_data,
-                headers=headers,
-                params=self._async_params(async_mode)
+            response = self._post_with_busy_retry(
+                lambda: requests.post(
+                    f"{API_URL}/data/addplot_waveform",
+                    files=files_to_upload,
+                    data=form_data,
+                    headers=headers,
+                    params=self._async_params(async_mode)
+                ),
+                reset=lambda: [handle.seek(0) for _, handle in files_to_upload]
             )
 
             if async_mode:
@@ -1087,12 +1144,15 @@ class toorPIA:
                 form_data['identna_options'] = json.dumps(identna_params)
             
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
-            response = requests.post(
-                f"{API_URL}/data/addplot_csvform",
-                files=files_to_upload,
-                data=form_data,
-                headers=headers,
-                params=self._async_params(async_mode)
+            response = self._post_with_busy_retry(
+                lambda: requests.post(
+                    f"{API_URL}/data/addplot_csvform",
+                    files=files_to_upload,
+                    data=form_data,
+                    headers=headers,
+                    params=self._async_params(async_mode)
+                ),
+                reset=lambda: [handle.seek(0) for _, handle in files_to_upload]
             )
 
             if async_mode:
@@ -1379,12 +1439,15 @@ class toorPIA:
 
             # Send as multipart/form-data to new basemap_csvform endpoint
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
-            response = requests.post(
-                f"{API_URL}/data/basemap_csvform",
-                files=files_to_upload,
-                data=form_data,
-                headers=headers,
-                params=self._async_params(async_mode)
+            response = self._post_with_busy_retry(
+                lambda: requests.post(
+                    f"{API_URL}/data/basemap_csvform",
+                    files=files_to_upload,
+                    data=form_data,
+                    headers=headers,
+                    params=self._async_params(async_mode)
+                ),
+                reset=lambda: [handle.seek(0) for _, handle in files_to_upload]
             )
 
             if async_mode:
@@ -1635,12 +1698,15 @@ class toorPIA:
                 form_data['vector_normalization'] = 'true' if bool(vector_normalization) else 'false'
 
             headers = {'session-key': self.session_key}  # Content-Type is auto-set by requests
-            response = requests.post(
-                f"{API_URL}/data/basemap_waveform",
-                files=files_to_upload,
-                data=form_data,
-                headers=headers,
-                params=self._async_params(async_mode)
+            response = self._post_with_busy_retry(
+                lambda: requests.post(
+                    f"{API_URL}/data/basemap_waveform",
+                    files=files_to_upload,
+                    data=form_data,
+                    headers=headers,
+                    params=self._async_params(async_mode)
+                ),
+                reset=lambda: [handle.seek(0) for _, handle in files_to_upload]
             )
 
             if async_mode:
@@ -2034,7 +2100,8 @@ class toorPIA:
                     except:
                         pass
 
-        response = _post(file_paths)
+        # _post は試行のたびにファイルを開き直すため、503 再試行時の巻き戻しは不要
+        response = self._post_with_busy_retry(lambda: _post(file_paths))
 
         has_gzip = any(p.lower().endswith('.csv.gz') for p in file_paths)
         if has_gzip and response.status_code == 415:
@@ -2056,7 +2123,7 @@ class toorPIA:
                         fallback_paths.append(tmp)
                     else:
                         fallback_paths.append(p)
-                response = _post(fallback_paths)
+                response = self._post_with_busy_retry(lambda: _post(fallback_paths))
             finally:
                 for tmp in fallback_temps:
                     try:
