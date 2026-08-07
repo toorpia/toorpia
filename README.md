@@ -411,6 +411,31 @@ export TOORPIA_API_KEY='your-api-key'
 export TOORPIA_API_URL='http://your-server:3000'
 ```
 
+### Server-Busy Retry
+
+The backend limits how many analysis tasks run at once server-wide. When all
+execution slots are taken, data-processing requests (`fit_transform`, `addplot`,
+`basemap_*`, `addplot_*`) are rejected immediately with HTTP 503 (`SERVER_BUSY`)
+and a `Retry-After` header. The client handles this automatically: it waits the
+suggested interval and resends the same request, up to a configurable total wait
+time (default: 30 minutes). Progress is printed while waiting.
+
+```bash
+# Total time to keep retrying on 503 SERVER_BUSY, in minutes (default 30).
+# Set 0 to disable retrying and fail immediately.
+export TOORPIA_MAX_BUSY_WAIT_MIN=30
+```
+
+The limit can also be set per client instance, which takes precedence over the
+environment variable:
+
+```python
+client = toorPIA(max_busy_wait_min=10)
+```
+
+Servers without this concurrency limit never return 503 `SERVER_BUSY`, so the
+retry logic has no effect on older backends.
+
 ### MCP Server (Claude Desktop / Claude Code / Cursor)
 
 AI clients can operate toorPIA directly through the MCP server [`@toorpia/mcp`](https://www.npmjs.com/package/@toorpia/mcp), specialized for embedding analysis (preview, basemap creation, anomaly detection, map listing). Add to your client's MCP configuration:
