@@ -31,6 +31,7 @@ classifiers = [
 ]
 
 [project.urls]
+Website = "https://www.toor.jpn.com/"
 Homepage = "https://github.com/toorpia/toorpia"
 Documentation = "https://github.com/toorpia/toorpia/blob/main/docs/api-reference.md"
 "Release Notes" = "https://github.com/toorpia/toorpia/releases"
