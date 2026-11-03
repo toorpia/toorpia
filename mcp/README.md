@@ -1,6 +1,6 @@
 # @toorpia/mcp — toorPIA MCP Server (Embedding Analysis)
 
-An [MCP](https://modelcontextprotocol.io/) server that lets AI clients (Claude Desktop, Claude Code, Cursor, …) analyze **embedding vectors** with the [toorPIA](https://toorpia.com/) API.
+An [MCP](https://modelcontextprotocol.io/) server that lets AI clients (Claude Desktop, Claude Code, Cursor, …) analyze **embedding vectors** with the [toorPIA](https://www.toor.jpn.com/) API.
 
 toorPIA is a dimensionality-reduction and anomaly-detection service built on an O(n) Laplacian-eigenmaps implementation. Unlike t-SNE/UMAP, results are **deterministic** (same input → same map) and new data can be **added to an existing map without recomputation**, so coordinates stay comparable over time. This makes it well suited for monitoring embedding drift, detecting anomalous batches against a learned baseline, and reproducible visual exploration of embedding spaces.
 
